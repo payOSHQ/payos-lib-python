@@ -1,6 +1,5 @@
 """Batch payout resource for payOS API v1."""
 
-import uuid
 from typing import Any, Optional
 
 from .....types.v1 import Payout, PayoutBatchRequest
@@ -22,7 +21,7 @@ class Batch(BaseResource):
         Create a batch payout.
         """
         if idempotency_key is None:
-            idempotency_key = str(uuid.uuid4())
+            idempotency_key = self._client.crypto.create_uuid4()
 
         headers_with_idempotency = {
             "x-idempotency-key": idempotency_key,
@@ -56,7 +55,7 @@ class AsyncBatch(AsyncBaseResource):
         Create a batch payout.
         """
         if idempotency_key is None:
-            idempotency_key = str(uuid.uuid4())
+            idempotency_key = self._client.crypto.create_uuid4()
 
         headers_with_idempotency = {
             "x-idempotency-key": idempotency_key,

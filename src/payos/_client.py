@@ -353,7 +353,7 @@ class PayOS:
         else:
             raise InvalidSignatureError("Invalid signature response type")
 
-        if response_signature != expected_signature:
+        if not expected_signature or response_signature != expected_signature:
             raise InvalidSignatureError("Response signature verification failed")
 
     def request(

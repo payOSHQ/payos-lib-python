@@ -2,7 +2,7 @@
 
 [![PyPI version](<https://img.shields.io/pypi/v/payos.svg?label=pypi%20(stable)>)](https://pypi.org/project/payos/)
 
-The payOS Python library provides convenient access to the payOS Merchant API from applications written in Python. The library includes type definitions for all request params and response fields, and offers both synchronous ans asynchronous clients powered by [httpx](https://github.com/encode/httpx)
+The payOS Python library provides convenient access to the payOS Merchant API from applications written in Python. The library includes type definitions for all request params and response fields, and offers both synchronous and asynchronous clients powered by [httpx](https://github.com/encode/httpx).
 
 To learn how to use payOS Merchant API, checkout our [API Reference](https://payos.vn/docs/api) and [Documentation](https://payos.vn/docs). We also have some examples in [Examples](./examples/).
 
