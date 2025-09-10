@@ -66,8 +66,10 @@ def sync_main() -> None:
 
         print("\nFetching recent payouts...")
         # List recent payouts
-        payouts_page = client.payouts.list(params=GetPayoutListParams(limit=3, offset=6))
-        payouts = payouts_page.to_list()
+        payouts_page = client.payouts.list(params=GetPayoutListParams(limit=10, offset=20))
+        payouts = []
+        for payout in payouts_page.to_list():
+            payouts.append(payout.model_dump_camel_case())
 
         if len(payouts) == 0:
             print("No payouts found")

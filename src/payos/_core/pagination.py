@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from .._client import PayOS
 
 T = TypeVar("T")
+ResponseT = TypeVar("ResponseT")
 
 
 class PaginationParams(PayOSBaseModel):
@@ -43,11 +44,13 @@ class Page(Generic[T]):
     def __init__(
         self,
         client: "PayOS",
+        cast_to: type[ResponseT],
         data: list[T],
         pagination: Pagination,
         options: FinalRequestOptions,
     ) -> None:
         self._client = client
+        self.cast_to = cast_to
         self._data = data
         self._pagination = pagination
         self._options = options
@@ -94,8 +97,8 @@ class Page(Generic[T]):
             ),
         )
 
-        response: dict[str, Any] = self._client.request(next_options, cast_to=dict)
-        return self._create_page_instance(self._client, response, next_options)
+        response = self._client.request(next_options, cast_to=self.cast_to)
+        return self._create_page_instance(self._client, self.cast_to, response, next_options)
 
     def get_previous_page(self) -> "Page[T]":
         """Get the previous page of results."""
@@ -121,23 +124,37 @@ class Page(Generic[T]):
             ),
         )
 
-        response: dict[str, Any] = self._client.request(prev_options, cast_to=dict)
-        return self._create_page_instance(self._client, response, prev_options)
+        response = self._client.request(prev_options, cast_to=self.cast_to)
+        return self._create_page_instance(self._client, self.cast_to, response, prev_options)
 
     def _create_page_instance(
-        self, client: Any, data: Any, options: FinalRequestOptions
+        self, client: Any, cast_to: type[ResponseT], data: Any, options: FinalRequestOptions
     ) -> "Page[T]":
         """Create a new page instance. Override in subclasses for custom page types."""
-        pagination_data = data.get("pagination", {})
-        pagination = Pagination.model_validate(pagination_data)
-        # Find the first list property in data (excluding pagination)
-        items = []
-        for key, value in data.items():
-            if key != "pagination" and isinstance(value, list):
-                items = value
-                break
+        # Handle both dict and Pydantic model responses
+        if hasattr(data, "pagination"):
+            # Pydantic model
+            pagination = data.pagination
+            # Find the first list attribute (excluding pagination)
+            items = []
+            for attr_name in dir(data):
+                if not attr_name.startswith("_") and attr_name != "pagination":
+                    attr_value = getattr(data, attr_name)
+                    if isinstance(attr_value, list):
+                        items = attr_value
+                        break
+        else:
+            # Dict format
+            pagination_data = data.get("pagination", {})
+            pagination = Pagination.model_validate(pagination_data)
+            # Find the first list property in data (excluding pagination)
+            items = []
+            for key, value in data.items():
+                if key != "pagination" and isinstance(value, list):
+                    items = value
+                    break
 
-        return Page(client, items, pagination, options)
+        return Page(client, cast_to, items, pagination, options)
 
     def iter_all(self) -> Iterator[T]:
         """Iterate over all items across all pages."""
@@ -166,11 +183,13 @@ class AsyncPage(Generic[T]):
     def __init__(
         self,
         client: "AsyncPayOS",
+        cast_to: type[ResponseT],
         data: list[T],
         pagination: Pagination,
         options: FinalRequestOptions,
     ) -> None:
         self._client = client
+        self.cast_to = cast_to
         self._data = data
         self._pagination = pagination
         self._options = options
@@ -217,8 +236,8 @@ class AsyncPage(Generic[T]):
             ),
         )
 
-        response: dict[str, Any] = await self._client.request(next_options, cast_to=dict)
-        return self._create_page_instance(self._client, response, next_options)
+        response = await self._client.request(next_options, cast_to=self.cast_to)
+        return self._create_page_instance(self._client, self.cast_to, response, next_options)
 
     async def get_previous_page(self) -> "AsyncPage[T]":
         """Get the previous page of results."""
@@ -244,23 +263,37 @@ class AsyncPage(Generic[T]):
             ),
         )
 
-        response: dict[str, Any] = await self._client.request(prev_options, cast_to=dict)
-        return self._create_page_instance(self._client, response, prev_options)
+        response = await self._client.request(prev_options, cast_to=self.cast_to)
+        return self._create_page_instance(self._client, self.cast_to, response, prev_options)
 
     def _create_page_instance(
-        self, client: Any, data: Any, options: FinalRequestOptions
+        self, client: Any, cast_to: type[ResponseT], data: Any, options: FinalRequestOptions
     ) -> "AsyncPage[T]":
         """Create a new page instance. Override in subclasses for custom page types."""
-        pagination_data = data.get("pagination", {})
-        pagination = Pagination.model_validate(pagination_data)
-        # Find the first list property in data (excluding pagination)
-        items = []
-        for key, value in data.items():
-            if key != "pagination" and isinstance(value, list):
-                items = value
-                break
+        # Handle both dict and Pydantic model responses
+        if hasattr(data, "pagination"):
+            # Pydantic model
+            pagination = data.pagination
+            # Find the first list attribute (excluding pagination)
+            items = []
+            for attr_name in dir(data):
+                if not attr_name.startswith("_") and attr_name != "pagination":
+                    attr_value = getattr(data, attr_name)
+                    if isinstance(attr_value, list):
+                        items = attr_value
+                        break
+        else:
+            # Dict format
+            pagination_data = data.get("pagination", {})
+            pagination = Pagination.model_validate(pagination_data)
+            # Find the first list property in data (excluding pagination)
+            items = []
+            for key, value in data.items():
+                if key != "pagination" and isinstance(value, list):
+                    items = value
+                    break
 
-        return AsyncPage(client, items, pagination, options)
+        return AsyncPage(client, cast_to, items, pagination, options)
 
     async def iter_all(self) -> AsyncIterator[T]:
         """Async iterate over all items across all pages."""

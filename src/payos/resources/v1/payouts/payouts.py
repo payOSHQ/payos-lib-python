@@ -88,7 +88,9 @@ class Payouts(BaseResource):
             signature_response="header",
             **kwargs,
         )
-        return Page(self._client, response.payouts, response.pagination, request_options)
+        return Page(
+            self._client, PayoutListResponse, response.payouts, response.pagination, request_options
+        )
 
     def estimate_credit(
         self,
@@ -183,7 +185,9 @@ class AsyncPayouts(AsyncBaseResource):
             signature_response="header",
             **kwargs,
         )
-        return AsyncPage(self._client, response.payouts, response.pagination, request_options)
+        return AsyncPage(
+            self._client, PayoutListResponse, response.payouts, response.pagination, request_options
+        )
 
     async def estimate_credit(
         self,
