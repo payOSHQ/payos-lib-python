@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -e
+
+echo "Building package with version sync..."
+uv run poe build
+
+if [ -z "${PYPI_TOKEN}" ]; then
+    echo -e "The PYPI_TOKEN secret has not been set. Please set it in either this repository's secrets or your organization secrets."
+    exit 1
+fi
+
+echo "The environment is ready to push releases!"
+
+uv publish --token $PYPI_TOKEN

@@ -1,0 +1,31 @@
+name: Publish to PyPi
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  workflow_dispatch:
+
+jobs:
+  publish-and-release:
+    runs-on: ubuntu-latest
+    environment: publish
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Publish to PyPI
+        run: |
+          bash ./scripts/publish-pypi
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN  || secrets.PAYOS_PYPI_TOKEN }}

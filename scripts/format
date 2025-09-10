@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+echo "==> Running formatters"
+
+uv run poe format
+
+echo "==> Making sure it imports"
+uv run python -c 'import payos'
