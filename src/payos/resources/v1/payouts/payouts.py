@@ -24,14 +24,22 @@ class Payouts(BaseResource):
         self,
         payout_data: PayoutRequest,
         *,
+        idempotency_key: Optional[str] = None,
         extra_headers: Optional[dict[str, str]] = None,
         **kwargs: Any,
     ) -> Payout:
         """Create a new payout."""
+        if idempotency_key is None:
+            idempotency_key = self._client.crypto.create_uuid4()
+
+        headers_with_idempotency = {
+            "x-idempotency-key": idempotency_key,
+            **(extra_headers or {}),
+        }
         response = self._client.post(
             "/v1/payouts",
             body=payout_data,
-            headers=extra_headers,
+            headers=headers_with_idempotency,
             cast_to=Payout,
             signature_request="header",
             signature_response="header",
@@ -112,14 +120,22 @@ class AsyncPayouts(AsyncBaseResource):
         self,
         payout_data: PayoutRequest,
         *,
+        idempotency_key: Optional[str] = None,
         extra_headers: Optional[dict[str, str]] = None,
         **kwargs: Any,
     ) -> Payout:
         """Create a new payout."""
+        if idempotency_key is None:
+            idempotency_key = self._client.crypto.create_uuid4()
+
+        headers_with_idempotency = {
+            "x-idempotency-key": idempotency_key,
+            **(extra_headers or {}),
+        }
         response = await self._client.post(
             "/v1/payouts",
             body=payout_data,
-            headers=extra_headers,
+            headers=headers_with_idempotency,
             cast_to=Payout,
             signature_request="header",
             signature_response="header",
