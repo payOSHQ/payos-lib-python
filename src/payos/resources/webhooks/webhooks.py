@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from ..._core.exceptions import PayOSError, WebhookError
 from ...types.webhooks import (
     ConfirmWebhookResponse,
+    ConfirmWebhookRequest,
     Webhook,
     WebhookData,
 )
@@ -29,7 +30,7 @@ class Webhooks(BaseResource):
         try:
             response = self._client.post(
                 "/confirm-webhook",
-                body={"webhook_url": webhook_url},
+                body=ConfirmWebhookRequest(webhook_url=webhook_url),
                 cast_to=ConfirmWebhookResponse,
                 **kwargs,
             )
@@ -104,7 +105,7 @@ class AsyncWebhooks(AsyncBaseResource):
         try:
             response = await self._client.post(
                 "/confirm-webhook",
-                body={"webhook_url": webhook_url},
+                body=ConfirmWebhookRequest(webhook_url=webhook_url),
                 cast_to=ConfirmWebhookResponse,
                 **kwargs,
             )
