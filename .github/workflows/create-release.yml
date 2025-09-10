@@ -4,8 +4,13 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+*"
+      - "v[0-9]+.[0-9]+.[0-9]+[a-zA-Z]+[0-9]*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create release for (e.g., v1.0.0rc1)"
+        required: true
+        type: string
 
 jobs:
   create-release:
@@ -21,25 +26,35 @@ jobs:
       - name: Extract version information
         id: version_info
         run: |
-          VERSION="${{ github.ref_name }}"
+          # Determine version based on trigger type
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
 
           # Check if current version is pre-release (e.g. alpha / beta / rc)
-          if [[ "$VERSION" =~ ([a-zA-Z]+)([0-9]*)?$ ]]; then
+          if [[ "$VERSION" =~ v[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z]+[0-9]*)$ ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
             echo "prerelease_tag=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
             echo "release_name=$VERSION" >> $GITHUB_OUTPUT
+            echo "Detected as prerelease with tag: ${BASH_REMATCH[1]}"
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
             echo "prerelease_tag=" >> $GITHUB_OUTPUT
             echo "release_name=$VERSION" >> $GITHUB_OUTPUT
+            echo "Detected as stable release"
           fi
 
       - name: Extract changelog content
         id: changelog
         run: |
           # https://medium.com/%40usman_qb/from-git-tag-to-github-release-automating-changelog-extraction-9cfcad1b13c4
-          VERSION="${{ github.ref_name }}"
+          # Get version from previous step
+          VERSION="${{ steps.version_info.outputs.version }}"
           # Remove 'v' prefix if it exists for matching changelog
           VERSION_NUMBER="${VERSION#v}"
 
