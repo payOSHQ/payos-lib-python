@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 (2025-09-10)
+## 1.0.0 (2025-09-11)
 
 Release v1. For full migrate guild see [MIGRATION.md](./MIGRATION.md).
 
