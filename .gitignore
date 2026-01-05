@@ -9,3 +9,6 @@ dist
 .env
 
 .DS_Store
+
+cov.xml
+.coverage

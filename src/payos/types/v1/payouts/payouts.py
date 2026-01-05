@@ -27,7 +27,7 @@ class PayoutRequest(PayOSBaseModel):
     description: str
     to_bin: str
     to_account_number: str
-    category: Optional[str] = None
+    category: Optional[list[str]] = None
 
 
 class PayoutTransaction(PayOSBaseModel):

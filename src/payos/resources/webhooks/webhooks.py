@@ -116,10 +116,31 @@ class AsyncWebhooks(AsyncBaseResource):
         except Exception as error:
             raise error
 
-    async def verify(self, webhook: Webhook) -> WebhookData:
+    async def verify(self, payload: Union[str, bytes, dict, Webhook]) -> WebhookData:
         """
         Verify the webhook data sent from payOS.
         """
+        if isinstance(payload, Webhook):
+            webhook = payload
+        else:
+            if isinstance(payload, (bytes, bytearray)):
+                payload_str = payload.decode("utf-8")
+                payload_obj = safe_json_parse(payload_str)
+                if not payload_obj:
+                    raise WebhookError("Invalid JSON")
+            elif isinstance(payload, str):
+                payload_obj = safe_json_parse(payload)
+                if not payload_obj:
+                    raise WebhookError("Invalid JSON")
+            elif isinstance(payload, dict):
+                payload_obj = payload
+            else:
+                raise WebhookError(f"Unsupported payload type: {type(payload)}")
+            try:
+                webhook = Webhook(**payload_obj)
+            except ValidationError as e:
+                raise WebhookError(f"Webhook schema validation failed: {e}") from e
+
         data = webhook.data
         signature = webhook.signature
 

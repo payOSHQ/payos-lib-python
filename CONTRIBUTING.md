@@ -34,6 +34,14 @@ uv run poe format
 uv run poe lint
 ```
 
+## Testing
+
+We use [pytest](https://docs.pytest.org) as testing framework.
+
+```bash
+uv run poe test
+```
+
 ## Publishing and release
 
 Update version with `uv version --bump`:
