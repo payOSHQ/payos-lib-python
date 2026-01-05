@@ -125,7 +125,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --cov=payos --cov-report=xml:cov.xml"
 asyncio_mode = "auto"
 
 [dependency-groups]
@@ -138,5 +138,6 @@ dev = [
     "mypy>=1.17.1",
     "ruff>=0.12.11",
     "poethepoet>=0.37.0",
+    "pytest-cov>=7.0.0",
 ]
 example = ["flask>=3.1.2", "python-dotenv>=1.1.1"]
