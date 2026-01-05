@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1 (2026-01-05)
+
+### Bug Fixes
+
+- **core:** allow empty dict compute signature instead of return `None`
+- **types:** change category field of `PayoutRequest` from `Optional[str]` to `Optional[list[str]]`
+- **resources:** enhance async verify webhook to support multiple payload types
+
 ## 1.0.0 (2025-09-11)
 
 Release v1. For full migrate guild see [MIGRATION.md](./MIGRATION.md).
