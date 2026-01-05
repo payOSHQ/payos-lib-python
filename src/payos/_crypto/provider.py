@@ -110,7 +110,7 @@ class CryptoProvider:
         self, data: Union[dict[str, Any], Any], key: str
     ) -> Optional[str]:
         """Create HMAC signature from object data."""
-        if not data or not key:
+        if data is None or not key:
             return None
 
         # Convert Pydantic models to camelCase dict
@@ -128,7 +128,7 @@ class CryptoProvider:
         self, data: Union[dict[str, Any], Any], key: str
     ) -> Optional[str]:
         """Create signature for payment request using specific fields."""
-        if not data or not key:
+        if data is None or not key:
             return None
 
         data = _convert_to_camel_case_dict(data)
