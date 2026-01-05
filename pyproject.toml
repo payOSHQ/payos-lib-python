@@ -109,6 +109,7 @@ force-wrap-aliases = true
 "typecheck" = [{ cmd = "mypy ./src" }]
 format = ["fix:ruff", "format:ruff"]
 lint = ["check:ruff", "typecheck", "check:importable"]
+test = [{ cmd = "pytest" }]
 
 # Combined tasks
 check = ["format", "lint"]
