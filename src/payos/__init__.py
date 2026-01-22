@@ -21,14 +21,6 @@ from ._core.exceptions import (
     WebhookError,
 )
 from ._version import __version__
-from .types import (
-    CreatePaymentLinkRequest,
-    CreatePaymentLinkResponse,
-    ItemData,
-    PaymentLink,
-    Transaction,
-    WebhookData,
-)
 
 __all__ = [
     "types",
@@ -47,10 +39,4 @@ __all__ = [
     "InvalidSignatureError",
     "WebhookError",
     "__version__",
-    "CreatePaymentLinkRequest",
-    "CreatePaymentLinkResponse",
-    "ItemData",
-    "PaymentLink",
-    "Transaction",
-    "WebhookData",
 ]
