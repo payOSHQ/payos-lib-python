@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 (2026-06-22)
+
+### Features
+
+- **client:** add legacy compatibility layer to support v0.x code with deprecation warnings [#1](https://github.com/payOSHQ/payos-lib-python/issues/1)
+
 ## 1.0.1 (2026-01-05)
 
 ### Bug Fixes
