@@ -41,21 +41,12 @@ from .utils._compat import (
 from .utils.logs import SensitiveHeadersFilter
 
 if TYPE_CHECKING:
-    from .types import (
-        ConfirmWebhookResponse,
-        CreatePaymentLinkRequest,
-        CreatePaymentLinkResponse,
-        PaymentLink,
-        WebhookData,
-    )
-
     # Legacy types from payos.type module (v0 compatibility)
     from .type import (
         CreatePaymentResult as LegacyCreatePaymentResult,
         PaymentData as LegacyPaymentData,
         PaymentLinkInformation as LegacyPaymentLinkInformation,
         WebhookData as LegacyWebhookData,
-        Transaction as LegacyTransaction,
     )
 
 try:
@@ -609,8 +600,8 @@ class PayOS:
             DeprecationWarning,
             stacklevel=2,
         )
-        from .type import PaymentData, CreatePaymentResult
         from .custom_error import PayOSError as LegacyPayOSError
+        from .type import CreatePaymentResult, PaymentData
 
         # v0 error constants (inline to avoid triggering deprecation warning)
         ERROR_MESSAGE = {
@@ -674,8 +665,8 @@ class PayOS:
             DeprecationWarning,
             stacklevel=2,
         )
-        from .type import PaymentLinkInformation, Transaction
         from .custom_error import PayOSError as LegacyPayOSError
+        from .type import PaymentLinkInformation, Transaction
 
         # v0 error constants
         ERROR_MESSAGE = {
@@ -741,8 +732,8 @@ class PayOS:
             DeprecationWarning,
             stacklevel=2,
         )
-        from .type import PaymentLinkInformation, Transaction
         from .custom_error import PayOSError as LegacyPayOSError
+        from .type import PaymentLinkInformation, Transaction
 
         ERROR_MESSAGE = {
             "INVALID_PARAMETER": "Invalid Parameter.",

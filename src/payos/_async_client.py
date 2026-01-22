@@ -15,19 +15,11 @@ from urllib.parse import urlencode, urljoin
 from typing_extensions import Unpack
 
 if TYPE_CHECKING:
-    from .types import (
-        ConfirmWebhookResponse,
-        CreatePaymentLinkRequest,
-        CreatePaymentLinkResponse,
-        PaymentLink,
-        WebhookData,
-    )
     from .type import (
         CreatePaymentResult as LegacyCreatePaymentResult,
         PaymentData as LegacyPaymentData,
         PaymentLinkInformation as LegacyPaymentLinkInformation,
         WebhookData as LegacyWebhookData,
-        Transaction as LegacyTransaction,
     )
 
 from ._core import (
@@ -603,8 +595,8 @@ class AsyncPayOS:
             DeprecationWarning,
             stacklevel=2,
         )
-        from .type import PaymentData, CreatePaymentResult
         from .custom_error import PayOSError as LegacyPayOSError
+        from .type import CreatePaymentResult, PaymentData
 
         ERROR_MESSAGE = {
             "INVALID_PARAMETER": "Invalid Parameter.",
@@ -658,8 +650,8 @@ class AsyncPayOS:
             DeprecationWarning,
             stacklevel=2,
         )
-        from .type import PaymentLinkInformation, Transaction
         from .custom_error import PayOSError as LegacyPayOSError
+        from .type import PaymentLinkInformation, Transaction
 
         ERROR_MESSAGE = {
             "INVALID_PARAMETER": "Invalid Parameter.",
@@ -712,8 +704,8 @@ class AsyncPayOS:
             DeprecationWarning,
             stacklevel=2,
         )
-        from .type import PaymentLinkInformation, Transaction
         from .custom_error import PayOSError as LegacyPayOSError
+        from .type import PaymentLinkInformation, Transaction
 
         ERROR_MESSAGE = {
             "INVALID_PARAMETER": "Invalid Parameter.",

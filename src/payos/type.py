@@ -7,7 +7,7 @@
 
 import warnings
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 warnings.warn(
     "The 'payos.type' module is deprecated and will be removed in v2.0.0. "
@@ -40,7 +40,7 @@ class PaymentData:
         cancelUrl: str,
         returnUrl: str,
         buyerName: Optional[str] = None,
-        items: Optional[List[ItemData]] = None,
+        items: Optional[list[ItemData]] = None,
         buyerEmail: Optional[str] = None,
         buyerPhone: Optional[str] = None,
         buyerAddress: Optional[str] = None,
@@ -148,7 +148,7 @@ class PaymentLinkInformation:
     amountRemaining: int
     status: str
     createdAt: str
-    transactions: List[Transaction]
+    transactions: list[Transaction]
     cancellationReason: Optional[str]
     canceledAt: Optional[str]
 

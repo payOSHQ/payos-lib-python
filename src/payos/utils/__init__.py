@@ -1,5 +1,12 @@
 """Utilities module."""
 
+# Legacy v0.x compatibility exports
+from ._compat import (
+    convertObjToQueryStr,
+    createSignatureFromObj,
+    createSignatureOfPaymentRequest,
+    sortObjDataByKey,
+)
 from .casting import cast_to
 from .env import get_env_var
 from .json_utils import build_query_string, request_to_dict, response_to_dict, safe_json_parse
@@ -8,14 +15,6 @@ from .logs import (
     setup_logging,
 )
 from .validation import validate_positive_number
-
-# Legacy v0.x compatibility exports
-from ._compat import (
-    convertObjToQueryStr,
-    createSignatureFromObj,
-    createSignatureOfPaymentRequest,
-    sortObjDataByKey,
-)
 
 __all__ = [
     "logger",

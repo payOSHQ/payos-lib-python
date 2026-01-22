@@ -5,7 +5,12 @@ import json
 import httpx
 import pytest
 
-from payos.utils.json_utils import build_query_string, request_to_dict, response_to_dict, safe_json_parse
+from payos.utils.json_utils import (
+    build_query_string,
+    request_to_dict,
+    response_to_dict,
+    safe_json_parse,
+)
 
 
 class TestSafeJsonParse:
