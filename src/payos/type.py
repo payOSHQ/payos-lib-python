@@ -7,7 +7,7 @@
 
 import warnings
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 warnings.warn(
     "The 'payos.type' module is deprecated and will be removed in v2.0.0. "
@@ -23,7 +23,7 @@ class ItemData:
         self.quantity = quantity
         self.price = price
 
-    def to_json(self):
+    def to_json(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "quantity": self.quantity,
@@ -60,7 +60,7 @@ class PaymentData:
         self.buyerAddress = buyerAddress
         self.expiredAt = expiredAt
 
-    def to_json(self):
+    def to_json(self) -> dict[str, Any]:
         return {
             "orderCode": self.orderCode,
             "amount": self.amount,
@@ -92,7 +92,7 @@ class CreatePaymentResult:
     qrCode: str
     expiredAt: Optional[int] = None
 
-    def to_json(self):
+    def to_json(self) -> dict[str, Any]:
         return {
             "bin": self.bin,
             "accountNumber": self.accountNumber,
@@ -123,7 +123,7 @@ class Transaction:
     counterAccountName: Optional[str]
     counterAccountNumber: Optional[str]
 
-    def to_json(self):
+    def to_json(self) -> dict[str, Any]:
         return {
             "reference": self.reference,
             "amount": self.amount,
@@ -152,7 +152,7 @@ class PaymentLinkInformation:
     cancellationReason: Optional[str]
     canceledAt: Optional[str]
 
-    def to_json(self):
+    def to_json(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "orderCode": self.orderCode,
@@ -186,7 +186,7 @@ class WebhookData:
     virtualAccountNumber: Optional[str]
     currency: str
 
-    def to_json(self):
+    def to_json(self) -> dict[str, Any]:
         return {
             "orderCode": self.orderCode,
             "amount": self.amount,
