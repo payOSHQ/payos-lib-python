@@ -19,7 +19,9 @@ with open(TEST_CASES_PATH, "r", encoding="utf-8") as f:
 
 # Filter test cases by type
 BODY_TEST_CASES = [tc for tc in ALL_TEST_CASES if tc["type"] == "body"]
-CREATE_PAYMENT_LINK_TEST_CASES = [tc for tc in ALL_TEST_CASES if tc["type"] == "create-payment-link"]
+CREATE_PAYMENT_LINK_TEST_CASES = [
+    tc for tc in ALL_TEST_CASES if tc["type"] == "create-payment-link"
+]
 HEADER_TEST_CASES = [tc for tc in ALL_TEST_CASES if tc["type"] == "header"]
 
 
