@@ -6,12 +6,29 @@ import json
 import logging
 import random
 import time
+import warnings
 from functools import cached_property
 from types import TracebackType
-from typing import Any, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 from urllib.parse import urlencode, urljoin
 
 from typing_extensions import Unpack
+
+if TYPE_CHECKING:
+    from .types import (
+        ConfirmWebhookResponse,
+        CreatePaymentLinkRequest,
+        CreatePaymentLinkResponse,
+        PaymentLink,
+        WebhookData,
+    )
+    from .type import (
+        CreatePaymentResult as LegacyCreatePaymentResult,
+        PaymentData as LegacyPaymentData,
+        PaymentLinkInformation as LegacyPaymentLinkInformation,
+        WebhookData as LegacyWebhookData,
+        Transaction as LegacyTransaction,
+    )
 
 from ._core import (
     FileDownloadResponse,
@@ -33,6 +50,10 @@ from .utils import (
     request_to_dict,
     response_to_dict,
     validate_positive_number,
+)
+from .utils._compat import (
+    _create_signature_from_obj,
+    _create_signature_of_payment_request,
 )
 from .utils.logs import SensitiveHeadersFilter
 
@@ -561,3 +582,254 @@ class AsyncPayOS:
     @cached_property
     def payouts_account(self) -> AsyncPayoutsAccount:
         return AsyncPayoutsAccount(self)
+
+    # =========================================================================
+    # DEPRECATED METHODS - Backward compatibility layer for v0.x
+    # These methods are deprecated and will be removed in v2.0.0
+    # =========================================================================
+
+    async def createPaymentLink(
+        self, paymentData: "LegacyPaymentData"
+    ) -> "LegacyCreatePaymentResult":
+        """Create a payment link.
+
+        .. deprecated:: 1.0.0
+            Use :meth:`payment_requests.create` instead.
+            This method will be removed in v2.0.0.
+        """
+        warnings.warn(
+            "createPaymentLink() is deprecated and will be removed in v2.0.0. "
+            "Use client.payment_requests.create() instead. ",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from .type import PaymentData, CreatePaymentResult
+        from .custom_error import PayOSError as LegacyPayOSError
+
+        ERROR_MESSAGE = {
+            "INVALID_PARAMETER": "Invalid Parameter.",
+            "DATA_NOT_INTEGRITY": "The data is unreliable because the signature of the response does not match the signature of the data",
+            "INTERNAL_SERVER_ERROR": "Internal Server Error.",
+        }
+        ERROR_CODE = {"INTERNAL_SERVER_ERROR": "20"}
+
+        if not isinstance(paymentData, PaymentData):
+            raise ValueError(
+                f"{ERROR_MESSAGE['INVALID_PARAMETER']} paymentData is not a PaymentData Type"
+            )
+
+        paymentData.signature = _create_signature_of_payment_request(paymentData, self.checksum_key)
+
+        url = f"{self.base_url}/v2/payment-requests"
+        headers = self._build_headers()
+
+        response = await self._http_client.post(url, json=paymentData.to_json(), headers=headers)
+
+        if response.status_code == 200:
+            response_json = response.json()
+            if response_json["code"] == "00":
+                response_signature = _create_signature_from_obj(
+                    response_json["data"], self.checksum_key
+                )
+                if response_signature != response_json["signature"]:
+                    raise Exception(ERROR_MESSAGE["DATA_NOT_INTEGRITY"])
+                if response_json["data"] is not None:
+                    return CreatePaymentResult(**response_json["data"])
+                raise LegacyPayOSError(code=response_json["code"], message=response_json["desc"])
+            else:
+                raise LegacyPayOSError(code=response_json["code"], message=response_json["desc"])
+
+        raise LegacyPayOSError(
+            ERROR_CODE["INTERNAL_SERVER_ERROR"], ERROR_MESSAGE["INTERNAL_SERVER_ERROR"]
+        )
+
+    async def getPaymentLinkInformation(
+        self, orderId: Union[str, int]
+    ) -> "LegacyPaymentLinkInformation":
+        """Get payment link information.
+
+        .. deprecated:: 1.0.0
+            Use :meth:`payment_requests.get` instead.
+            This method will be removed in v2.0.0.
+        """
+        warnings.warn(
+            "getPaymentLinkInformation() is deprecated and will be removed in v2.0.0. "
+            "Use client.payment_requests.get() instead. ",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from .type import PaymentLinkInformation, Transaction
+        from .custom_error import PayOSError as LegacyPayOSError
+
+        ERROR_MESSAGE = {
+            "INVALID_PARAMETER": "Invalid Parameter.",
+            "DATA_NOT_INTEGRITY": "The data is unreliable because the signature of the response does not match the signature of the data",
+            "INTERNAL_SERVER_ERROR": "Internal Server Error.",
+        }
+        ERROR_CODE = {"INTERNAL_SERVER_ERROR": "20"}
+
+        if type(orderId) not in [str, int]:
+            raise ValueError(ERROR_MESSAGE["INVALID_PARAMETER"])
+
+        url = f"{self.base_url}/v2/payment-requests/{orderId}"
+        headers = self._build_headers()
+
+        response = await self._http_client.get(url, headers=headers)
+
+        if response.status_code == 200:
+            response_json = response.json()
+            if response_json["code"] == "00":
+                response_signature = _create_signature_from_obj(
+                    response_json["data"], self.checksum_key
+                )
+                if response_signature != response_json["signature"]:
+                    raise Exception(ERROR_MESSAGE["DATA_NOT_INTEGRITY"])
+                if response_json["data"] is not None:
+                    response_json["data"]["transactions"] = [
+                        Transaction(**x) for x in response_json["data"]["transactions"]
+                    ]
+                    return PaymentLinkInformation(**response_json["data"])
+                raise LegacyPayOSError(code=response_json["code"], message=response_json["desc"])
+            else:
+                raise LegacyPayOSError(code=response_json["code"], message=response_json["desc"])
+
+        raise LegacyPayOSError(
+            ERROR_CODE["INTERNAL_SERVER_ERROR"], ERROR_MESSAGE["INTERNAL_SERVER_ERROR"]
+        )
+
+    async def cancelPaymentLink(
+        self, orderId: Union[str, int], cancellationReason: Optional[str] = None
+    ) -> "LegacyPaymentLinkInformation":
+        """Cancel a payment link.
+
+        .. deprecated:: 1.0.0
+            Use :meth:`payment_requests.cancel` instead.
+            This method will be removed in v2.0.0.
+        """
+        warnings.warn(
+            "cancelPaymentLink() is deprecated and will be removed in v2.0.0. "
+            "Use client.payment_requests.cancel() instead. ",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from .type import PaymentLinkInformation, Transaction
+        from .custom_error import PayOSError as LegacyPayOSError
+
+        ERROR_MESSAGE = {
+            "INVALID_PARAMETER": "Invalid Parameter.",
+            "DATA_NOT_INTEGRITY": "The data is unreliable because the signature of the response does not match the signature of the data",
+            "INTERNAL_SERVER_ERROR": "Internal Server Error.",
+        }
+        ERROR_CODE = {"INTERNAL_SERVER_ERROR": "20"}
+
+        if type(orderId) not in [str, int]:
+            raise ValueError(ERROR_MESSAGE["INVALID_PARAMETER"])
+
+        url = f"{self.base_url}/v2/payment-requests/{orderId}/cancel"
+        headers = self._build_headers()
+        body = (
+            {"cancellationReason": cancellationReason} if cancellationReason is not None else None
+        )
+
+        response = await self._http_client.post(url, headers=headers, json=body)
+
+        if response.status_code == 200:
+            response_json = response.json()
+            if response_json["code"] == "00":
+                response_signature = _create_signature_from_obj(
+                    response_json["data"], self.checksum_key
+                )
+                if response_signature != response_json["signature"]:
+                    raise Exception(ERROR_MESSAGE["DATA_NOT_INTEGRITY"])
+                if response_json["data"] is not None:
+                    response_json["data"]["transactions"] = [
+                        Transaction(**x) for x in response_json["data"]["transactions"]
+                    ]
+                    return PaymentLinkInformation(**response_json["data"])
+                raise LegacyPayOSError(code=response_json["code"], message=response_json["desc"])
+            else:
+                raise LegacyPayOSError(code=response_json["code"], message=response_json["desc"])
+
+        raise LegacyPayOSError(
+            ERROR_CODE["INTERNAL_SERVER_ERROR"], ERROR_MESSAGE["INTERNAL_SERVER_ERROR"]
+        )
+
+    async def confirmWebhook(self, webhookUrl: str) -> str:
+        """Confirm a webhook URL.
+
+        .. deprecated:: 1.0.0
+            Use :meth:`webhooks.confirm` instead.
+            This method will be removed in v2.0.0.
+        """
+        warnings.warn(
+            "confirmWebhook() is deprecated and will be removed in v2.0.0. "
+            "Use client.webhooks.confirm() instead. ",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from .custom_error import PayOSError as LegacyPayOSError
+
+        ERROR_MESSAGE = {
+            "INVALID_PARAMETER": "Invalid Parameter.",
+            "WEBHOOK_URL_INVALID": "Webhook URL invalid.",
+            "UNAUTHORIZED": "Unauthorized.",
+            "INTERNAL_SERVER_ERROR": "Internal Server Error.",
+        }
+        ERROR_CODE = {"INTERNAL_SERVER_ERROR": "20", "UNAUTHORIZED": "401"}
+
+        if webhookUrl is None or len(webhookUrl) == 0:
+            raise ValueError(ERROR_MESSAGE["INVALID_PARAMETER"])
+
+        url = f"{self.base_url}/confirm-webhook"
+        headers = self._build_headers()
+        data = {"webhookUrl": webhookUrl}
+
+        response = await self._http_client.post(url, json=data, headers=headers)
+
+        if response.status_code == 200:
+            return webhookUrl
+        elif response.status_code == 404:
+            raise LegacyPayOSError(
+                ERROR_CODE["INTERNAL_SERVER_ERROR"], ERROR_MESSAGE["WEBHOOK_URL_INVALID"]
+            )
+        elif response.status_code == 401:
+            raise LegacyPayOSError(ERROR_CODE["UNAUTHORIZED"], ERROR_MESSAGE["UNAUTHORIZED"])
+
+        raise LegacyPayOSError(
+            ERROR_CODE["INTERNAL_SERVER_ERROR"], ERROR_MESSAGE["INTERNAL_SERVER_ERROR"]
+        )
+
+    async def verifyPaymentWebhookData(self, webhookBody: Any) -> "LegacyWebhookData":
+        """Verify payment webhook data.
+
+        .. deprecated:: 1.0.0
+            Use :meth:`webhooks.verify` instead.
+            This method will be removed in v2.0.0.
+        """
+        warnings.warn(
+            "verifyPaymentWebhookData() is deprecated and will be removed in v2.0.0. "
+            "Use client.webhooks.verify() instead. ",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from .type import WebhookData
+
+        ERROR_MESSAGE = {
+            "NO_DATA": "No data.",
+            "NO_SIGNATURE": "No signature.",
+            "DATA_NOT_INTEGRITY": "The data is unreliable because the signature of the response does not match the signature of the data",
+        }
+
+        data = webhookBody["data"]
+        signature = webhookBody["signature"]
+
+        if data is None:
+            raise ValueError(ERROR_MESSAGE["NO_DATA"])
+        if signature is None:
+            raise ValueError(ERROR_MESSAGE["NO_SIGNATURE"])
+
+        sign_data = _create_signature_from_obj(data, self.checksum_key)
+        if sign_data != signature:
+            raise Exception(ERROR_MESSAGE["DATA_NOT_INTEGRITY"])
+
+        return WebhookData(**data)

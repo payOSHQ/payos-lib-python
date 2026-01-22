@@ -9,6 +9,14 @@ from .logs import (
 )
 from .validation import validate_positive_number
 
+# Legacy v0.x compatibility exports
+from ._compat import (
+    convertObjToQueryStr,
+    createSignatureFromObj,
+    createSignatureOfPaymentRequest,
+    sortObjDataByKey,
+)
+
 __all__ = [
     "logger",
     "setup_logging",
@@ -19,4 +27,9 @@ __all__ = [
     "response_to_dict",
     "validate_positive_number",
     "cast_to",
+    # Legacy v0.x compatibility
+    "convertObjToQueryStr",
+    "sortObjDataByKey",
+    "createSignatureFromObj",
+    "createSignatureOfPaymentRequest",
 ]
