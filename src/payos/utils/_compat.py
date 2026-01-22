@@ -14,15 +14,15 @@ import hashlib
 import hmac
 import json
 import warnings
-from typing import Any, Dict, List, Union
+from typing import Any
 
 
-def _sort_obj_data_by_key(obj: Dict[str, Any]) -> Dict[str, Any]:
+def _sort_obj_data_by_key(obj: dict[str, Any]) -> dict[str, Any]:
     """Internal: Sort dictionary by keys (no deprecation warning)."""
     return dict(sorted(obj.items()))
 
 
-def _convert_obj_to_query_str(obj: Dict[str, Any]) -> str:
+def _convert_obj_to_query_str(obj: dict[str, Any]) -> str:
     """Internal: Convert dictionary to URL query string format (no deprecation warning)."""
     query_string = []
 
@@ -43,7 +43,7 @@ def _convert_obj_to_query_str(obj: Dict[str, Any]) -> str:
     return "&".join(query_string)
 
 
-def _create_signature_from_obj(data: Dict[str, Any], key: str) -> str:
+def _create_signature_from_obj(data: dict[str, Any], key: str) -> str:
     """Internal: Create HMAC-SHA256 signature from dictionary (no deprecation warning)."""
     sorted_data_by_key = _sort_obj_data_by_key(data)
     data_query_str = _convert_obj_to_query_str(sorted_data_by_key)
@@ -91,7 +91,7 @@ def _create_signature_of_payment_request(data: Any, key: str) -> str:
     ).hexdigest()
 
 
-def sortObjDataByKey(obj: Dict[str, Any]) -> Dict[str, Any]:
+def sortObjDataByKey(obj: dict[str, Any]) -> dict[str, Any]:
     """Sort dictionary by keys.
 
     .. deprecated:: 1.0.0
@@ -106,7 +106,7 @@ def sortObjDataByKey(obj: Dict[str, Any]) -> Dict[str, Any]:
     return _sort_obj_data_by_key(obj)
 
 
-def convertObjToQueryStr(obj: Dict[str, Any]) -> str:
+def convertObjToQueryStr(obj: dict[str, Any]) -> str:
     """Convert dictionary to URL query string format.
 
     .. deprecated:: 1.0.0
@@ -121,7 +121,7 @@ def convertObjToQueryStr(obj: Dict[str, Any]) -> str:
     return _convert_obj_to_query_str(obj)
 
 
-def createSignatureFromObj(data: Dict[str, Any], key: str) -> str:
+def createSignatureFromObj(data: dict[str, Any], key: str) -> str:
     """Create HMAC-SHA256 signature from dictionary.
 
     .. deprecated:: 1.0.0
