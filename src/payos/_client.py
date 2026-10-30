@@ -39,6 +39,7 @@ from .utils._compat import (
     _create_signature_of_payment_request,
 )
 from .utils.logs import SensitiveHeadersFilter
+from .utils.response_validation import validate_response_data
 
 if TYPE_CHECKING:
     # Legacy types from payos.type module (v0 compatibility)
@@ -360,6 +361,7 @@ class PayOS:
             raise InvalidSignatureError("Missing response signature")
 
         if options.signature_response == "body":
+            validate_response_data(response_data)
             expected_signature = self.crypto.create_signature_from_object(
                 response_data,
                 self.checksum_key,

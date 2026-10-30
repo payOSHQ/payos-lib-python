@@ -13,6 +13,7 @@ from ....types.v1 import (
     PayoutRequest,
 )
 from ....types.v1.payouts.payouts import PayoutListResponse
+from ....utils.path import encode_path_segment
 from ..._base import AsyncBaseResource, BaseResource
 from .batch.batch import AsyncBatch, Batch
 
@@ -56,7 +57,7 @@ class Payouts(BaseResource):
     ) -> Payout:
         """Retrieve details of a specific payout."""
         response = self._client.get(
-            f"/v1/payouts/{identifier}",
+            f"/v1/payouts/{encode_path_segment('identifier', identifier)}",
             headers=extra_headers,
             cast_to=Payout,
             signature_response="header",
@@ -154,7 +155,7 @@ class AsyncPayouts(AsyncBaseResource):
     ) -> Payout:
         """Retrieve details of a specific payout."""
         response = await self._client.get(
-            f"/v1/payouts/{identifier}",
+            f"/v1/payouts/{encode_path_segment('identifier', identifier)}",
             headers=extra_headers,
             cast_to=Payout,
             signature_response="header",
