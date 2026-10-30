@@ -4,8 +4,8 @@
 
 ### Bug Fixes
 
-- **webhooks:** stricter webhook data validation; wire payloads that fail it now raise `WebhookError("Invalid webhook data: ...")` instead of `Webhook schema validation failed`
-- **client:** response signature verification now fails closed and raises `InvalidSignatureError("Missing response signature")` when the signature is absent
+- **webhooks:** stricter webhook data validation; wire payloads that fail it now raise `WebhookError("Invalid webhook data: ...")` instead of `Webhook schema validation failed` ([GHSA-7w9h-f6cc-xjmw](https://github.com/payOSHQ/payos-lib-python/security/advisories/GHSA-7w9h-f6cc-xjmw))
+- **client:** response signature verification now fails closed and raises `InvalidSignatureError("Missing response signature")` when the signature is absent ([GHSA-7884-9wf9-7vgm](https://github.com/payOSHQ/payos-lib-python/security/advisories/GHSA-7884-9wf9-7vgm))
 - **core:** compare signatures in constant time
 - **webhooks:** unknown wire webhook fields are now accepted and authenticated; they are omitted from the returned typed model (previously rejected by `extra="forbid"`)
 
