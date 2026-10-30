@@ -1,9 +1,13 @@
 from typing import Optional
 
+from pydantic import ConfigDict
+
 from ..._core.models import PayOSBaseModel
 
 
 class WebhookData(PayOSBaseModel):
+    model_config = ConfigDict({**PayOSBaseModel.model_config, "extra": "ignore"})
+
     order_code: int
     amount: int
     description: str

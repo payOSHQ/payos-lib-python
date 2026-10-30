@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1 (2026-10-30)
+
+### Bug Fixes
+
+- **webhooks:** stricter webhook data validation; wire payloads that fail it now raise `WebhookError("Invalid webhook data: ...")` instead of `Webhook schema validation failed`
+- **client:** response signature verification now fails closed and raises `InvalidSignatureError("Missing response signature")` when the signature is absent
+- **core:** compare signatures in constant time
+- **webhooks:** unknown wire webhook fields are now accepted and authenticated; they are omitted from the returned typed model (previously rejected by `extra="forbid"`)
+
 ## 1.1.0 (2026-06-22)
 
 ### Features

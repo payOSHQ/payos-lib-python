@@ -943,8 +943,72 @@ class TestPayOSSignature:
         )
         monkeypatch.setattr(client, "crypto", mock_crypto_sync)
 
-        with pytest.raises(InvalidSignatureError, match="signature missing"):
+        with pytest.raises(InvalidSignatureError, match="Missing response signature"):
             client.get("/test", cast_to=dict, signature_response="header")
+
+    def test_missing_header_response_signature_on_success(
+        self, httpx_mock: HTTPXMock, mock_crypto_sync, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Test success response without header signature raises InvalidSignatureError."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            json={"code": "00", "desc": "success", "data": {"field": "value"}},
+        )
+
+        client = PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            base_url=BASE_URL,
+        )
+        monkeypatch.setattr(client, "crypto", mock_crypto_sync)
+
+        with pytest.raises(InvalidSignatureError, match="Missing response signature"):
+            client.get("/test", cast_to=dict, signature_response="header")
+
+    def test_missing_body_response_signature_on_success(
+        self, httpx_mock: HTTPXMock, mock_crypto_sync, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Test success response without body signature raises InvalidSignatureError."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            json={"code": "00", "desc": "success", "data": {"field": "value"}},
+        )
+
+        client = PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            base_url=BASE_URL,
+        )
+        monkeypatch.setattr(client, "crypto", mock_crypto_sync)
+
+        with pytest.raises(InvalidSignatureError, match="Missing response signature"):
+            client.get("/test", cast_to=dict, signature_response="body")
+
+    def test_unencodable_body_response_signature_fails_verification(
+        self, httpx_mock: HTTPXMock, mock_crypto_sync, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Test lone-surrogate body signature raises InvalidSignatureError."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            content=b'{"code": "00", "desc": "success", "data": {}, "signature": "\\ud800"}',
+            headers={"content-type": "application/json"},
+        )
+
+        client = PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            base_url=BASE_URL,
+        )
+        monkeypatch.setattr(client, "crypto", mock_crypto_sync)
+
+        with pytest.raises(InvalidSignatureError, match="Response signature verification failed"):
+            client.get("/test", cast_to=dict, signature_response="body")
 
     def test_sign_request_with_body_signature(
         self, httpx_mock: HTTPXMock, mock_crypto_sync, monkeypatch: pytest.MonkeyPatch

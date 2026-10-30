@@ -25,7 +25,7 @@ from ._core.exceptions import (
     PayOSError,
 )
 from ._core.request_options import RequestOptions
-from ._crypto import CryptoProvider
+from ._crypto import CryptoProvider, constant_time_equal
 from ._version import __version__
 from .utils import (
     cast_to as cast_response_to,
@@ -351,11 +351,13 @@ class PayOS:
         self, options: FinalRequestOptions, response_data: Any, response_signature: Optional[str]
     ) -> None:
         """Verify response signature."""
-        if not options.signature_response or not response_data:
+        if not options.signature_response:
+            return
+        if response_data is None:
             return
 
-        if not response_signature:
-            raise InvalidSignatureError("Response signature missing")
+        if not isinstance(response_signature, str) or not response_signature:
+            raise InvalidSignatureError("Missing response signature")
 
         if options.signature_response == "body":
             expected_signature = self.crypto.create_signature_from_object(
@@ -367,7 +369,9 @@ class PayOS:
         else:
             raise InvalidSignatureError("Invalid signature response type")
 
-        if not expected_signature or response_signature != expected_signature:
+        if not expected_signature or not constant_time_equal(
+            response_signature, expected_signature
+        ):
             raise InvalidSignatureError("Response signature verification failed")
 
     def request(
