@@ -8,7 +8,7 @@
 - **client:** response signature verification now fails closed and raises `InvalidSignatureError("Missing response signature")` when the signature is absent ([GHSA-7884-9wf9-7vgm](https://github.com/payOSHQ/payos-lib-python/security/advisories/GHSA-7884-9wf9-7vgm))
 - **core:** compare signatures in constant time
 - **webhooks:** unknown wire webhook fields are now accepted and authenticated; they are omitted from the returned typed model (previously rejected by `extra="forbid"`)
-- **client:** percent-encode identifiers interpolated into API paths (including the legacy `getPaymentLinkInformation`/`cancelPaymentLink`) and reject empty, `.`/`..`, negative or unsafe-integer values; when a custom `http_client` follows redirects, drop `x-api-key`/`x-client-id`/`authorization`/`cookie`/`proxy-authorization` on cross-origin redirects (max 5 redirects); validate body-signed response data (`&key=` sequences, unsupported keys, nested objects, non-finite or unsafe numbers) before verifying its signature, raising `InvalidSignatureError`
+- **client:** percent-encode identifiers interpolated into API paths (including the legacy `getPaymentLinkInformation`/`cancelPaymentLink`) and reject empty, `.`/`..`, negative or unsafe-integer values; when a custom `http_client` follows redirects, drop `x-api-key`/`x-client-id`/`x-partner-code`/`authorization`/`cookie`/`proxy-authorization` on cross-origin redirects (max 5 redirects); validate body-signed response data (`&key=` sequences, unsupported keys, nested objects, non-finite or unsafe numbers) before verifying its signature, raising `InvalidSignatureError`
 
 ## 1.1.0 (2026-06-22)
 

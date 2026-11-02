@@ -5,11 +5,12 @@ from typing import Optional
 import httpx
 
 MAX_REDIRECTS = 5
-# httpx only drops ``Authorization`` on a cross-origin redirect, so ``x-api-key``/``x-client-id`` would
-# be forwarded to whatever host the redirect points to.
+# httpx only drops ``Authorization`` on a cross-origin redirect, so ``x-api-key``/``x-client-id``/``x-partner-code``
+# would be forwarded to whatever host the redirect points to.
 _SENSITIVE_REDIRECT_HEADERS = (
     "x-api-key",
     "x-client-id",
+    "x-partner-code",
     "authorization",
     "cookie",
     "proxy-authorization",
@@ -26,9 +27,10 @@ def build_redirect_request(
 ) -> Optional[httpx.Request]:
     """Return the request that follows the redirect ``response``, or ``None`` when it is not a redirect.
 
-    Credentials (``x-api-key``, ``x-client-id``, ``authorization``, ``cookie``, ``proxy-authorization``) are
-    dropped when the redirect leaves the origin (scheme, host, port) of ``request``. A ``303``, or a
-    ``301``/``302`` answering a ``POST``, switches to ``GET`` without body and ``Content-Type``.
+    Credentials (``x-api-key``, ``x-client-id``, ``x-partner-code``, ``authorization``, ``cookie``,
+    ``proxy-authorization``) are dropped when the redirect leaves the origin (scheme, host, port) of
+    ``request``. A ``303``, or a ``301``/``302`` answering a ``POST``, switches to ``GET`` without body
+    and ``Content-Type``.
     """
     location = response.headers.get("location")
     if not (300 <= response.status_code < 400) or not location:
