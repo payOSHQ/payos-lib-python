@@ -1318,6 +1318,245 @@ class TestAsyncPayOSRedirects:
         assert redirected.headers["x-api-key"] == API_KEY
         assert redirected.headers["x-client-id"] == CLIENT_ID
 
+    CREDENTIAL_HEADERS = (
+        "x-api-key",
+        "x-client-id",
+        "x-partner-code",
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+    )
+    EXTRA_HEADERS = {
+        "authorization": "Bearer test-token",
+        "cookie": "session=test-cookie",
+        "proxy-authorization": "Basic dGVzdDp0ZXN0",
+    }
+
+    def _partner_client(self, http_client: httpx.AsyncClient) -> AsyncPayOS:
+        return AsyncPayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            partner_code=PARTNER_CODE,
+            base_url=BASE_URL,
+            max_retries=0,
+            http_client=http_client,
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "target",
+        [
+            "https://other.example/landed",
+            "https://api-test.payos.vn:8443/landed",
+            "http://api-test.payos.vn/landed",
+        ],
+        ids=["other host", "other port", "other scheme"],
+    )
+    async def test_cross_origin_redirect_removes_credential_headers(
+        self, httpx_mock: HTTPXMock, target: str
+    ):
+        """Test every credential header, including the partner code, is removed on a cross-origin hop."""
+        httpx_mock.add_response(
+            method="GET", url=f"{BASE_URL}/test", status_code=302, headers={"location": target}
+        )
+        httpx_mock.add_response(
+            method="GET", url=target, json={"code": "00", "desc": "success", "data": {}}
+        )
+
+        await self._partner_client(httpx.AsyncClient(follow_redirects=True)).get(
+            "/test", headers=dict(self.EXTRA_HEADERS), cast_to=dict
+        )
+
+        first, redirected = httpx_mock.get_requests()
+        assert first.headers["x-partner-code"] == PARTNER_CODE
+        for name in self.CREDENTIAL_HEADERS:
+            assert name in first.headers
+            assert name not in redirected.headers
+        assert str(redirected.url) == target
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "location", ["/landed", "https://api-test.payos.vn:443/landed"], ids=["relative", "port"]
+    )
+    async def test_same_origin_redirect_keeps_credential_headers(
+        self, httpx_mock: HTTPXMock, location: str
+    ):
+        """Test every credential header, including the partner code, is kept on a same-origin hop."""
+        httpx_mock.add_response(
+            method="GET", url=f"{BASE_URL}/test", status_code=302, headers={"location": location}
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        await self._partner_client(httpx.AsyncClient(follow_redirects=True)).get(
+            "/test", headers=dict(self.EXTRA_HEADERS), cast_to=dict
+        )
+
+        first, redirected = httpx_mock.get_requests()
+        for name in self.CREDENTIAL_HEADERS:
+            assert redirected.headers[name] == first.headers[name]
+        assert redirected.headers["x-partner-code"] == PARTNER_CODE
+
+    @pytest.mark.asyncio
+    async def test_credential_headers_stay_removed_after_returning_to_origin(
+        self, httpx_mock: HTTPXMock
+    ):
+        """Test headers removed on a cross-origin hop are not restored when the chain returns."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            status_code=302,
+            headers={"location": "https://other.example/hop"},
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url="https://other.example/hop",
+            status_code=302,
+            headers={"location": f"{BASE_URL}/landed"},
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        await self._partner_client(httpx.AsyncClient(follow_redirects=True)).get(
+            "/test", headers=dict(self.EXTRA_HEADERS), cast_to=dict
+        )
+
+        requests = httpx_mock.get_requests()
+        assert [str(request.url) for request in requests] == [
+            f"{BASE_URL}/test",
+            "https://other.example/hop",
+            f"{BASE_URL}/landed",
+        ]
+        for request in requests[1:]:
+            for name in self.CREDENTIAL_HEADERS:
+                assert name not in request.headers
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("status_code", "method", "expected_method"),
+        [
+            (303, "POST", "GET"),
+            (303, "PUT", "GET"),
+            (301, "POST", "GET"),
+            (302, "POST", "GET"),
+            (302, "PUT", "PUT"),
+            (307, "POST", "POST"),
+            (307, "PUT", "PUT"),
+            (308, "POST", "POST"),
+        ],
+    )
+    async def test_redirect_method_and_body(
+        self, httpx_mock: HTTPXMock, status_code: int, method: str, expected_method: str
+    ):
+        """Test 303 and 301/302 answering POST switch to GET without body; others keep both."""
+        httpx_mock.add_response(
+            method=method,
+            url=f"{BASE_URL}/test",
+            status_code=status_code,
+            headers={"location": "/landed"},
+        )
+        httpx_mock.add_response(
+            method=expected_method,
+            url=f"{BASE_URL}/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        client = self._partner_client(httpx.AsyncClient(follow_redirects=True))
+        send = client.post if method == "POST" else client.put
+        await send("/test", body={"amount": 2000}, cast_to=dict)
+
+        first, redirected = httpx_mock.get_requests()
+        assert redirected.method == expected_method
+        if expected_method == "GET":
+            assert redirected.content == b""
+            assert "content-type" not in redirected.headers
+            assert "content-length" not in redirected.headers
+        else:
+            assert redirected.content == first.content
+            assert redirected.headers["content-type"] == "application/json"
+
+    @pytest.mark.asyncio
+    async def test_five_redirects_are_followed(self, httpx_mock: HTTPXMock):
+        """Test a chain of exactly five redirects is followed."""
+        for hop in range(5):
+            httpx_mock.add_response(
+                method="GET",
+                url=f"{BASE_URL}/hop{hop}",
+                status_code=302,
+                headers={"location": f"/hop{hop + 1}"},
+            )
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/hop5",
+            json={"code": "00", "desc": "success", "data": {"ok": True}},
+        )
+
+        result = await self._partner_client(httpx.AsyncClient(follow_redirects=True)).get(
+            "/hop0", cast_to=dict
+        )
+
+        assert result == {"ok": True}
+        assert len(httpx_mock.get_requests()) == 6
+
+    @pytest.mark.asyncio
+    async def test_sixth_redirect_fails(self, httpx_mock: HTTPXMock):
+        """Test a sixth redirect raises before it is followed."""
+        for hop in range(6):
+            httpx_mock.add_response(
+                method="GET",
+                url=f"{BASE_URL}/hop{hop}",
+                status_code=302,
+                headers={"location": f"/hop{hop + 1}"},
+            )
+
+        with pytest.raises(PayOSError) as excinfo:
+            await self._partner_client(httpx.AsyncClient(follow_redirects=True)).get(
+                "/hop0", cast_to=dict
+            )
+
+        assert type(excinfo.value) is PayOSError
+        assert str(excinfo.value) == "Too many redirects (more than 5)"
+        assert len(httpx_mock.get_requests()) == 6
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("custom", [True, False], ids=["custom client", "default client"])
+    async def test_client_without_follow_redirects_does_not_follow(
+        self, httpx_mock: HTTPXMock, custom: bool
+    ):
+        """Test a redirect is returned as an error when the http client does not follow redirects."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            status_code=302,
+            headers={"location": "https://other.example/landed"},
+            json={"code": "302", "desc": "Found"},
+        )
+
+        client = (
+            self._partner_client(httpx.AsyncClient())
+            if custom
+            else AsyncPayOS(
+                client_id=CLIENT_ID,
+                api_key=API_KEY,
+                checksum_key=CHECKSUM_KEY,
+                partner_code=PARTNER_CODE,
+                base_url=BASE_URL,
+                max_retries=0,
+            )
+        )
+        with pytest.raises(APIError) as excinfo:
+            await client.get("/test", cast_to=dict)
+
+        assert excinfo.value.status_code == 302
+        assert len(httpx_mock.get_requests()) == 1
+
 
 class TestAsyncPayOSConstants:
     """Test static constants."""
