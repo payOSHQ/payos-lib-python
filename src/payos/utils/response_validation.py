@@ -5,8 +5,8 @@ with lists serialised as JSON. The received data must therefore not be able to s
 replace a scalar with an object or turn a list into a string that swallows the remaining fields.
 """
 
-import re
 import math
+import re
 from typing import Any
 
 from .._core.exceptions import InvalidSignatureError

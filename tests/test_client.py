@@ -1,5 +1,6 @@
 """Tests for synchronous PayOS client."""
 
+import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -1218,6 +1219,71 @@ class TestPayOSErrors:
             client.get("/test", cast_to=dict)
 
         assert exc_info.value.error_code == "999"
+
+
+class TestPayOSRedirects:
+    """Test redirects followed by a custom http_client with follow_redirects=True."""
+
+    def _client(self) -> PayOS:
+        return PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            base_url=BASE_URL,
+            max_retries=0,
+            http_client=httpx.Client(follow_redirects=True),
+        )
+
+    def test_cross_origin_redirect_drops_credentials(self, httpx_mock: HTTPXMock):
+        """Test credentials are not forwarded to another origin."""
+        httpx_mock.add_response(
+            method="POST",
+            url=f"{BASE_URL}/test",
+            status_code=302,
+            headers={"location": "https://other.example/landed"},
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url="https://other.example/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        self._client().post("/test", body={"a": 1}, cast_to=dict)
+
+        redirected = httpx_mock.get_requests()[-1]
+        for name in ("x-api-key", "x-client-id", "content-type"):
+            assert name not in redirected.headers
+        assert redirected.content == b""
+
+    def test_same_origin_redirect_keeps_credentials(self, httpx_mock: HTTPXMock):
+        """Test credentials are kept on a same-origin redirect."""
+        httpx_mock.add_response(
+            method="GET", url=f"{BASE_URL}/test", status_code=302, headers={"location": "/landed"}
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        self._client().get("/test", cast_to=dict)
+
+        redirected = httpx_mock.get_requests()[-1]
+        assert redirected.headers["x-api-key"] == API_KEY
+        assert redirected.headers["x-client-id"] == CLIENT_ID
+
+    def test_too_many_redirects(self, httpx_mock: HTTPXMock):
+        """Test redirects are capped."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            status_code=302,
+            headers={"location": "/test"},
+            is_reusable=True,
+        )
+
+        with pytest.raises(PayOSError, match="Too many redirects"):
+            self._client().get("/test", cast_to=dict)
 
 
 class TestPayOSConstants:
