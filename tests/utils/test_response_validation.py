@@ -34,6 +34,8 @@ class TestValidateResponseData:
             {"a": "x&b=1"},
             {"a": {"b": 1}},
             {"a-b": 1},
+            {"a\n": 1},
+            {"a": [{"b\n": 1}]},
             {"__proto__": 1},
             {"a": [{"b": {"c": 1}}]},
             {"a": [[1]]},

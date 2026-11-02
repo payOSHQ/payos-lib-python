@@ -40,7 +40,7 @@ from .utils._compat import (
 )
 from .utils.logs import SensitiveHeadersFilter
 from .utils.path import encode_path_segment
-from .utils.redirect import MAX_REDIRECTS, build_redirect_request
+from .utils.redirect import MAX_REDIRECTS, NoAuth, build_redirect_request
 from .utils.response_validation import validate_response_data
 
 if TYPE_CHECKING:
@@ -250,7 +250,7 @@ class PayOS:
         )
 
     def _send(self, request: httpx.Request) -> httpx.Response:
-        """Send ``request``, following redirects without leaking credentials to another origin.
+        """Send ``request``, following redirects while keeping credentials on the original origin.
 
         The default HTTP client does not follow redirects. When a custom ``http_client`` is created with
         ``follow_redirects=True``, redirects are followed here (at most ``MAX_REDIRECTS``) instead of by
@@ -259,17 +259,27 @@ class PayOS:
         if not self._http_client.follow_redirects:
             return self._http_client.send(request)
 
+        original_url = request.url
+        left_origin = False
+        # Client auth is reapplied while the chain stays on the original origin and never after it leaves.
+        auth: Any = httpx.USE_CLIENT_DEFAULT
         redirects = 0
         while True:
-            response = self._http_client.send(request, follow_redirects=False)
-            next_request = build_redirect_request(request, response)
-            if next_request is None:
+            response = self._http_client.send(request, auth=auth, follow_redirects=False)
+            redirect = build_redirect_request(
+                response,
+                original_url=original_url,
+                left_origin=left_origin,
+                cookies=self._http_client.cookies,
+            )
+            if redirect is None:
                 return response
             response.close()
             if redirects >= MAX_REDIRECTS:
                 raise PayOSError(f"Too many redirects (more than {MAX_REDIRECTS})")
             redirects += 1
-            request = next_request
+            request, left_origin = redirect
+            auth = NoAuth() if left_origin else httpx.USE_CLIENT_DEFAULT
 
     def _should_retry(self, response: httpx.Response, retry_count: int) -> bool:
         """Determine if request should be retried."""

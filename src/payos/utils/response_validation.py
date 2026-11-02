@@ -11,9 +11,9 @@ from typing import Any
 
 from .._core.exceptions import InvalidSignatureError
 
-_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
-# A ``&key=`` sequence inside a value is what lets the unencoded signed string be re-split.
-_SMUGGLING_PATTERN = re.compile(r"&[A-Za-z0-9_]+=")
+_KEY_PATTERN = re.compile(r"[A-Za-z0-9_]+")
+# A ``&key=`` sequence inside a value would let the unencoded signed string be split into other fields.
+_KEY_DELIMITER_PATTERN = re.compile(r"&[A-Za-z0-9_]+=")
 _MAX_SAFE_INTEGER = 2**53 - 1
 
 
@@ -31,7 +31,7 @@ def _validate_scalar(path: str, value: Any) -> None:
         if not math.isfinite(value) or (value.is_integer() and abs(value) > _MAX_SAFE_INTEGER):
             raise _invalid(f'"{path}" must be a finite number within the safe integer range')
     elif isinstance(value, str):
-        if _SMUGGLING_PATTERN.search(value):
+        if _KEY_DELIMITER_PATTERN.search(value):
             raise _invalid(f'"{path}" must not contain a "&key=" sequence')
     else:
         raise _invalid(f'"{path}" has an unsupported type')
@@ -39,7 +39,7 @@ def _validate_scalar(path: str, value: Any) -> None:
 
 def _validate_keys(path: str, record: dict[Any, Any]) -> None:
     for key in record:
-        if not isinstance(key, str) or not _KEY_PATTERN.match(key) or key == "__proto__":
+        if not isinstance(key, str) or not _KEY_PATTERN.fullmatch(key) or key == "__proto__":
             raise _invalid(f'unsupported key "{path}{key}"')
 
 
