@@ -9,6 +9,7 @@ from ....types.v2 import (
     CreatePaymentLinkResponse,
     PaymentLink,
 )
+from ....utils.path import encode_path_segment
 from ..._base import AsyncBaseResource, BaseResource
 from .invoices import AsyncInvoices, Invoices
 
@@ -44,7 +45,7 @@ class PaymentRequests(BaseResource):
     ) -> PaymentLink:
         """Get payment link information."""
         response = self._client.get(
-            f"/v2/payment-requests/{id}",
+            f"/v2/payment-requests/{encode_path_segment('id', id)}",
             headers=extra_headers,
             cast_to=PaymentLink,
             signature_response="body",
@@ -62,7 +63,7 @@ class PaymentRequests(BaseResource):
     ) -> PaymentLink:
         """Cancel a payment link."""
         response = self._client.post(
-            f"/v2/payment-requests/{id}/cancel",
+            f"/v2/payment-requests/{encode_path_segment('id', id)}/cancel",
             body=(
                 CancelPaymentLinkRequest(cancellation_reason=cancellation_reason)
                 if cancellation_reason
@@ -112,7 +113,7 @@ class AsyncPaymentRequests(AsyncBaseResource):
     ) -> PaymentLink:
         """Get payment link information."""
         response = await self._client.get(
-            f"/v2/payment-requests/{id}",
+            f"/v2/payment-requests/{encode_path_segment('id', id)}",
             headers=extra_headers,
             cast_to=PaymentLink,
             signature_response="body",
@@ -130,7 +131,7 @@ class AsyncPaymentRequests(AsyncBaseResource):
     ) -> PaymentLink:
         """Cancel a payment link."""
         response = await self._client.post(
-            f"/v2/payment-requests/{id}/cancel",
+            f"/v2/payment-requests/{encode_path_segment('id', id)}/cancel",
             body=(
                 CancelPaymentLinkRequest(cancellation_reason=cancellation_reason)
                 if cancellation_reason

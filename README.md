@@ -75,6 +75,8 @@ def webhooks():
     return jsonify({"error": None, "data": webhook_data.model_dump_camel_case()})
 ```
 
+Invalid payloads raise `WebhookError` with a message starting `Invalid webhook data`; pass the raw request body (`str`/`bytes`) to `verify()` for the strictest checks.
+
 For more information about webhooks, see [the API doc](https://payos.vn/docs/api/#tag/payment-webhook/operation/payment-webhook).
 
 ### Handling errors

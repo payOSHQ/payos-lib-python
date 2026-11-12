@@ -2,17 +2,20 @@
 
 from typing import Any, Union
 
-from pydantic import ValidationError
-
 from ..._core.exceptions import PayOSError, WebhookError
+from ..._crypto import constant_time_equal
 from ...types.webhooks import (
     ConfirmWebhookRequest,
     ConfirmWebhookResponse,
     Webhook,
     WebhookData,
 )
-from ...utils.json_utils import safe_json_parse
 from .._base import AsyncBaseResource, BaseResource
+from ._validation import (
+    load_json_no_duplicates,
+    validate_model_values,
+    validate_webhook_data,
+)
 
 
 class Webhooks(BaseResource):
@@ -47,47 +50,65 @@ class Webhooks(BaseResource):
         """
         if isinstance(payload, Webhook):
             webhook = payload
-        else:
-            if isinstance(payload, (bytes, bytearray)):
-                payload_str = payload.decode("utf-8")
-                payload_obj = safe_json_parse(payload_str)
-                if not payload_obj:
-                    raise WebhookError("Invalid JSON")
-            elif isinstance(payload, str):
-                payload_obj = safe_json_parse(payload)
-                if not payload_obj:
-                    raise WebhookError("Invalid JSON")
-            elif isinstance(payload, dict):
-                payload_obj = payload
-            else:
-                raise WebhookError(f"Unsupported payload type: {type(payload)}")
+            data = webhook.data
+            signature = webhook.signature
+
+            if not data:
+                raise WebhookError("Invalid webhook data")
+
+            if not signature:
+                raise WebhookError("Invalid signature")
+
+            if not self._client.checksum_key:
+                raise WebhookError("Checksum key not configured")
+
+            data_dict = dict(data.model_dump_camel_case())
+            validate_model_values(data_dict)
+            signed_signature = self._client.crypto.create_signature_from_object(
+                data_dict, self._client.checksum_key
+            )
+
+            if not signed_signature or not constant_time_equal(signed_signature, signature):
+                raise WebhookError("Data not integrity")
+
+            return webhook.data
+
+        payload_obj: object
+        if isinstance(payload, (bytes, bytearray)):
             try:
-                webhook = Webhook(**payload_obj)
-            except ValidationError as e:
-                raise WebhookError(f"Webhook schema validation failed: {e}") from e
+                payload_str = payload.decode("utf-8")
+            except UnicodeDecodeError as e:
+                raise WebhookError("Invalid JSON") from e
+            payload_obj = load_json_no_duplicates(payload_str)
+        elif isinstance(payload, str):
+            payload_obj = load_json_no_duplicates(payload)
+        elif isinstance(payload, dict):
+            payload_obj = payload
+        else:
+            raise WebhookError(f"Unsupported payload type: {type(payload)}")
 
-        data = webhook.data
-        signature = webhook.signature
-
-        if not data:
+        if not isinstance(payload_obj, dict):
             raise WebhookError("Invalid webhook data")
 
-        if not signature:
+        wire_data = payload_obj.get("data")
+        if wire_data is None:
+            raise WebhookError("Invalid webhook data")
+        validate_webhook_data(wire_data)
+
+        wire_signature = payload_obj.get("signature")
+        if not isinstance(wire_signature, str) or not wire_signature:
             raise WebhookError("Invalid signature")
 
         if not self._client.checksum_key:
             raise WebhookError("Checksum key not configured")
 
-        # Cast to Dict for signature verification
-        data_dict = dict(data.model_dump_camel_case())
-        signed_signature = self._client.crypto.create_signature_from_object(
-            data_dict, self._client.checksum_key
+        signed = self._client.crypto.create_signature_from_object(
+            wire_data, self._client.checksum_key
         )
-
-        if not signed_signature or signed_signature != signature:
+        if not signed or not constant_time_equal(signed, wire_signature):
             raise WebhookError("Data not integrity")
 
-        return data
+        return WebhookData.model_validate(wire_data)
 
 
 class AsyncWebhooks(AsyncBaseResource):
@@ -122,44 +143,62 @@ class AsyncWebhooks(AsyncBaseResource):
         """
         if isinstance(payload, Webhook):
             webhook = payload
-        else:
-            if isinstance(payload, (bytes, bytearray)):
-                payload_str = payload.decode("utf-8")
-                payload_obj = safe_json_parse(payload_str)
-                if not payload_obj:
-                    raise WebhookError("Invalid JSON")
-            elif isinstance(payload, str):
-                payload_obj = safe_json_parse(payload)
-                if not payload_obj:
-                    raise WebhookError("Invalid JSON")
-            elif isinstance(payload, dict):
-                payload_obj = payload
-            else:
-                raise WebhookError(f"Unsupported payload type: {type(payload)}")
+            data = webhook.data
+            signature = webhook.signature
+
+            if not data:
+                raise WebhookError("Invalid webhook data")
+
+            if not signature:
+                raise WebhookError("Invalid signature")
+
+            if not self._client.checksum_key:
+                raise WebhookError("Checksum key not configured")
+
+            data_dict = dict(data.model_dump_camel_case())
+            validate_model_values(data_dict)
+            signed_signature = self._client.crypto.create_signature_from_object(
+                data_dict, self._client.checksum_key
+            )
+
+            if not signed_signature or not constant_time_equal(signed_signature, signature):
+                raise WebhookError("Data not integrity")
+
+            return webhook.data
+
+        payload_obj: object
+        if isinstance(payload, (bytes, bytearray)):
             try:
-                webhook = Webhook(**payload_obj)
-            except ValidationError as e:
-                raise WebhookError(f"Webhook schema validation failed: {e}") from e
+                payload_str = payload.decode("utf-8")
+            except UnicodeDecodeError as e:
+                raise WebhookError("Invalid JSON") from e
+            payload_obj = load_json_no_duplicates(payload_str)
+        elif isinstance(payload, str):
+            payload_obj = load_json_no_duplicates(payload)
+        elif isinstance(payload, dict):
+            payload_obj = payload
+        else:
+            raise WebhookError(f"Unsupported payload type: {type(payload)}")
 
-        data = webhook.data
-        signature = webhook.signature
-
-        if not data:
+        if not isinstance(payload_obj, dict):
             raise WebhookError("Invalid webhook data")
 
-        if not signature:
+        wire_data = payload_obj.get("data")
+        if wire_data is None:
+            raise WebhookError("Invalid webhook data")
+        validate_webhook_data(wire_data)
+
+        wire_signature = payload_obj.get("signature")
+        if not isinstance(wire_signature, str) or not wire_signature:
             raise WebhookError("Invalid signature")
 
         if not self._client.checksum_key:
             raise WebhookError("Checksum key not configured")
 
-        # Cast to Dict for signature verification
-        data_dict = dict(data.model_dump_camel_case())
-        signed_signature = self._client.crypto.create_signature_from_object(
-            data_dict, self._client.checksum_key
+        signed = self._client.crypto.create_signature_from_object(
+            wire_data, self._client.checksum_key
         )
-
-        if not signed_signature or signed_signature != signature:
+        if not signed or not constant_time_equal(signed, wire_signature):
             raise WebhookError("Data not integrity")
 
-        return data
+        return WebhookData.model_validate(wire_data)

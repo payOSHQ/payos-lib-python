@@ -1,5 +1,8 @@
 """Tests for synchronous PayOS client."""
 
+from typing import Any
+
+import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -943,8 +946,72 @@ class TestPayOSSignature:
         )
         monkeypatch.setattr(client, "crypto", mock_crypto_sync)
 
-        with pytest.raises(InvalidSignatureError, match="signature missing"):
+        with pytest.raises(InvalidSignatureError, match="Missing response signature"):
             client.get("/test", cast_to=dict, signature_response="header")
+
+    def test_missing_header_response_signature_on_success(
+        self, httpx_mock: HTTPXMock, mock_crypto_sync, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Test success response without header signature raises InvalidSignatureError."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            json={"code": "00", "desc": "success", "data": {"field": "value"}},
+        )
+
+        client = PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            base_url=BASE_URL,
+        )
+        monkeypatch.setattr(client, "crypto", mock_crypto_sync)
+
+        with pytest.raises(InvalidSignatureError, match="Missing response signature"):
+            client.get("/test", cast_to=dict, signature_response="header")
+
+    def test_missing_body_response_signature_on_success(
+        self, httpx_mock: HTTPXMock, mock_crypto_sync, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Test success response without body signature raises InvalidSignatureError."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            json={"code": "00", "desc": "success", "data": {"field": "value"}},
+        )
+
+        client = PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            base_url=BASE_URL,
+        )
+        monkeypatch.setattr(client, "crypto", mock_crypto_sync)
+
+        with pytest.raises(InvalidSignatureError, match="Missing response signature"):
+            client.get("/test", cast_to=dict, signature_response="body")
+
+    def test_unencodable_body_response_signature_fails_verification(
+        self, httpx_mock: HTTPXMock, mock_crypto_sync, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Test lone-surrogate body signature raises InvalidSignatureError."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            content=b'{"code": "00", "desc": "success", "data": {}, "signature": "\\ud800"}',
+            headers={"content-type": "application/json"},
+        )
+
+        client = PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            base_url=BASE_URL,
+        )
+        monkeypatch.setattr(client, "crypto", mock_crypto_sync)
+
+        with pytest.raises(InvalidSignatureError, match="Response signature verification failed"):
+            client.get("/test", cast_to=dict, signature_response="body")
 
     def test_sign_request_with_body_signature(
         self, httpx_mock: HTTPXMock, mock_crypto_sync, monkeypatch: pytest.MonkeyPatch
@@ -1156,6 +1223,302 @@ class TestPayOSErrors:
         assert exc_info.value.error_code == "999"
 
 
+class TestPayOSRedirects:
+    """Test redirects followed by a custom http_client with follow_redirects=True."""
+
+    def _client(self) -> PayOS:
+        return PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            base_url=BASE_URL,
+            max_retries=0,
+            http_client=httpx.Client(follow_redirects=True),
+        )
+
+    def test_cross_origin_redirect_drops_credentials(self, httpx_mock: HTTPXMock):
+        """Test credentials are not forwarded to another origin."""
+        httpx_mock.add_response(
+            method="POST",
+            url=f"{BASE_URL}/test",
+            status_code=302,
+            headers={"location": "https://other.example/landed"},
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url="https://other.example/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        self._client().post("/test", body={"a": 1}, cast_to=dict)
+
+        redirected = httpx_mock.get_requests()[-1]
+        for name in ("x-api-key", "x-client-id", "content-type"):
+            assert name not in redirected.headers
+        assert redirected.content == b""
+
+    def test_same_origin_redirect_keeps_credentials(self, httpx_mock: HTTPXMock):
+        """Test credentials are kept on a same-origin redirect."""
+        httpx_mock.add_response(
+            method="GET", url=f"{BASE_URL}/test", status_code=302, headers={"location": "/landed"}
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        self._client().get("/test", cast_to=dict)
+
+        redirected = httpx_mock.get_requests()[-1]
+        assert redirected.headers["x-api-key"] == API_KEY
+        assert redirected.headers["x-client-id"] == CLIENT_ID
+
+    def test_too_many_redirects(self, httpx_mock: HTTPXMock):
+        """Test redirects are capped."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            status_code=302,
+            headers={"location": "/test"},
+            is_reusable=True,
+        )
+
+        with pytest.raises(PayOSError, match="Too many redirects"):
+            self._client().get("/test", cast_to=dict)
+
+    CREDENTIAL_HEADERS = (
+        "x-api-key",
+        "x-client-id",
+        "x-partner-code",
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+    )
+    EXTRA_HEADERS = {
+        "authorization": "Bearer test-token",
+        "cookie": "session=test-cookie",
+        "proxy-authorization": "Basic dGVzdDp0ZXN0",
+    }
+
+    def _partner_client(self, http_client: httpx.Client) -> PayOS:
+        return PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            partner_code=PARTNER_CODE,
+            base_url=BASE_URL,
+            max_retries=0,
+            http_client=http_client,
+        )
+
+    @pytest.mark.parametrize(
+        "target",
+        [
+            "https://other.example/landed",
+            "https://api-test.payos.vn:8443/landed",
+            "http://api-test.payos.vn/landed",
+        ],
+        ids=["other host", "other port", "other scheme"],
+    )
+    def test_cross_origin_redirect_removes_credential_headers(
+        self, httpx_mock: HTTPXMock, target: str
+    ):
+        """Test every credential header, including the partner code, is removed on a cross-origin hop."""
+        httpx_mock.add_response(
+            method="GET", url=f"{BASE_URL}/test", status_code=302, headers={"location": target}
+        )
+        httpx_mock.add_response(
+            method="GET", url=target, json={"code": "00", "desc": "success", "data": {}}
+        )
+
+        self._partner_client(httpx.Client(follow_redirects=True)).get(
+            "/test", headers=dict(self.EXTRA_HEADERS), cast_to=dict
+        )
+
+        first, redirected = httpx_mock.get_requests()
+        assert first.headers["x-partner-code"] == PARTNER_CODE
+        for name in self.CREDENTIAL_HEADERS:
+            assert name in first.headers
+            assert name not in redirected.headers
+        assert str(redirected.url) == target
+
+    @pytest.mark.parametrize(
+        "location", ["/landed", "https://api-test.payos.vn:443/landed"], ids=["relative", "port"]
+    )
+    def test_same_origin_redirect_keeps_credential_headers(
+        self, httpx_mock: HTTPXMock, location: str
+    ):
+        """Test every credential header, including the partner code, is kept on a same-origin hop."""
+        httpx_mock.add_response(
+            method="GET", url=f"{BASE_URL}/test", status_code=302, headers={"location": location}
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        self._partner_client(httpx.Client(follow_redirects=True)).get(
+            "/test", headers=dict(self.EXTRA_HEADERS), cast_to=dict
+        )
+
+        first, redirected = httpx_mock.get_requests()
+        for name in self.CREDENTIAL_HEADERS:
+            if name != "cookie":
+                assert redirected.headers[name] == first.headers[name]
+        assert redirected.headers["x-partner-code"] == PARTNER_CODE
+        # Like httpx, the Cookie header is rebuilt from the client cookie jar on each hop.
+        assert "cookie" not in redirected.headers
+
+    def test_credential_headers_stay_removed_after_returning_to_origin(self, httpx_mock: HTTPXMock):
+        """Test headers removed on a cross-origin hop are not restored when the chain returns."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            status_code=302,
+            headers={"location": "https://other.example/hop"},
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url="https://other.example/hop",
+            status_code=302,
+            headers={"location": f"{BASE_URL}/landed"},
+        )
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        self._partner_client(httpx.Client(follow_redirects=True)).get(
+            "/test", headers=dict(self.EXTRA_HEADERS), cast_to=dict
+        )
+
+        requests = httpx_mock.get_requests()
+        assert [str(request.url) for request in requests] == [
+            f"{BASE_URL}/test",
+            "https://other.example/hop",
+            f"{BASE_URL}/landed",
+        ]
+        for request in requests[1:]:
+            for name in self.CREDENTIAL_HEADERS:
+                assert name not in request.headers
+
+    @pytest.mark.parametrize(
+        ("status_code", "method", "expected_method"),
+        [
+            (303, "POST", "GET"),
+            (303, "PUT", "GET"),
+            (301, "POST", "GET"),
+            (302, "POST", "GET"),
+            (302, "PUT", "PUT"),
+            (307, "POST", "POST"),
+            (307, "PUT", "PUT"),
+            (308, "POST", "POST"),
+        ],
+    )
+    def test_redirect_method_and_body(
+        self, httpx_mock: HTTPXMock, status_code: int, method: str, expected_method: str
+    ):
+        """Test 303 and 301/302 answering POST switch to GET without body; others keep both."""
+        httpx_mock.add_response(
+            method=method,
+            url=f"{BASE_URL}/test",
+            status_code=status_code,
+            headers={"location": "/landed"},
+        )
+        httpx_mock.add_response(
+            method=expected_method,
+            url=f"{BASE_URL}/landed",
+            json={"code": "00", "desc": "success", "data": {}},
+        )
+
+        client = self._partner_client(httpx.Client(follow_redirects=True))
+        send = client.post if method == "POST" else client.put
+        send("/test", body={"amount": 2000}, cast_to=dict)
+
+        first, redirected = httpx_mock.get_requests()
+        assert redirected.method == expected_method
+        if expected_method == "GET":
+            assert redirected.content == b""
+            assert "content-type" not in redirected.headers
+            assert "content-length" not in redirected.headers
+        else:
+            assert redirected.content == first.content
+            assert redirected.headers["content-type"] == "application/json"
+
+    def test_five_redirects_are_followed(self, httpx_mock: HTTPXMock):
+        """Test a chain of exactly five redirects is followed."""
+        for hop in range(5):
+            httpx_mock.add_response(
+                method="GET",
+                url=f"{BASE_URL}/hop{hop}",
+                status_code=302,
+                headers={"location": f"/hop{hop + 1}"},
+            )
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/hop5",
+            json={"code": "00", "desc": "success", "data": {"ok": True}},
+        )
+
+        result = self._partner_client(httpx.Client(follow_redirects=True)).get(
+            "/hop0", cast_to=dict
+        )
+
+        assert result == {"ok": True}
+        assert len(httpx_mock.get_requests()) == 6
+
+    def test_sixth_redirect_fails(self, httpx_mock: HTTPXMock):
+        """Test a sixth redirect raises before it is followed."""
+        for hop in range(6):
+            httpx_mock.add_response(
+                method="GET",
+                url=f"{BASE_URL}/hop{hop}",
+                status_code=302,
+                headers={"location": f"/hop{hop + 1}"},
+            )
+
+        with pytest.raises(PayOSError) as excinfo:
+            self._partner_client(httpx.Client(follow_redirects=True)).get("/hop0", cast_to=dict)
+
+        assert type(excinfo.value) is PayOSError
+        assert str(excinfo.value) == "Too many redirects (more than 5)"
+        assert len(httpx_mock.get_requests()) == 6
+
+    @pytest.mark.parametrize("custom", [True, False], ids=["custom client", "default client"])
+    def test_client_without_follow_redirects_does_not_follow(
+        self, httpx_mock: HTTPXMock, custom: bool
+    ):
+        """Test a redirect is returned as an error when the http client does not follow redirects."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/test",
+            status_code=302,
+            headers={"location": "https://other.example/landed"},
+            json={"code": "302", "desc": "Found"},
+        )
+
+        client = (
+            self._partner_client(httpx.Client())
+            if custom
+            else PayOS(
+                client_id=CLIENT_ID,
+                api_key=API_KEY,
+                checksum_key=CHECKSUM_KEY,
+                partner_code=PARTNER_CODE,
+                base_url=BASE_URL,
+                max_retries=0,
+            )
+        )
+        with pytest.raises(APIError) as excinfo:
+            client.get("/test", cast_to=dict)
+
+        assert excinfo.value.status_code == 302
+        assert len(httpx_mock.get_requests()) == 1
+
+
 class TestPayOSConstants:
     """Test static constants."""
 
@@ -1170,3 +1533,113 @@ class TestPayOSConstants:
     def test_default_max_retries(self):
         """Test DEFAULT_MAX_RETRIES constant."""
         assert DEFAULT_MAX_RETRIES == 2
+
+
+class TestPayOSRedirectChain:
+    """Test auth, cookies and statuses across a manually followed redirect chain."""
+
+    OK = {"code": "00", "desc": "success", "data": {}}
+
+    def _client(self, **kwargs: Any) -> PayOS:
+        return PayOS(
+            client_id=CLIENT_ID,
+            api_key=API_KEY,
+            checksum_key=CHECKSUM_KEY,
+            base_url=BASE_URL,
+            http_client=httpx.Client(follow_redirects=True, **kwargs),
+        )
+
+    def test_client_auth_only_on_original_origin(self, httpx_mock: HTTPXMock):
+        """Test client auth is kept on a same-origin hop and not re-applied after leaving the origin."""
+        httpx_mock.add_response(url=f"{BASE_URL}/a", status_code=302, headers={"location": "/b"})
+        httpx_mock.add_response(
+            url=f"{BASE_URL}/b",
+            status_code=302,
+            headers={"location": "https://u:p@other.example/c"},
+        )
+        httpx_mock.add_response(url="https://other.example/c", json=self.OK)
+
+        self._client(auth=("u", "p")).get("/a", cast_to=dict)
+
+        first, same, other = httpx_mock.get_requests()
+        assert same.headers["authorization"] == first.headers["authorization"]
+        assert "authorization" not in other.headers
+
+    def test_client_auth_is_recomputed_for_same_origin_hop(self, httpx_mock: HTTPXMock):
+        """Test client auth that depends on the URL is applied again for a same-origin hop."""
+
+        class PathAuth(httpx.Auth):
+            def auth_flow(self, request: httpx.Request) -> Any:
+                request.headers["authorization"] = f"path {request.url.path}"
+                yield request
+
+        httpx_mock.add_response(url=f"{BASE_URL}/a", status_code=302, headers={"location": "/b"})
+        httpx_mock.add_response(url=f"{BASE_URL}/b", json=self.OK)
+
+        self._client(auth=PathAuth()).get("/a", cast_to=dict)
+
+        assert httpx_mock.get_requests()[-1].headers["authorization"] == "path /b"
+
+    def test_same_origin_set_cookie_on_redirect_is_sent(self, httpx_mock: HTTPXMock):
+        """Test a cookie set by a same-origin redirect is sent on the next same-origin hop."""
+        httpx_mock.add_response(
+            url=f"{BASE_URL}/a",
+            status_code=302,
+            headers={"location": "/b", "set-cookie": "sid=1; Path=/"},
+        )
+        httpx_mock.add_response(url=f"{BASE_URL}/b", json=self.OK)
+
+        self._client().get("/a", cast_to=dict)
+
+        assert httpx_mock.get_requests()[-1].headers["cookie"] == "sid=1"
+
+    def test_cookies_never_sent_after_leaving_origin(self, httpx_mock: HTTPXMock):
+        """Test jar cookies are not added again on B to B or back on A after leaving the origin."""
+        other = "https://other.example"
+        httpx_mock.add_response(
+            url=f"{BASE_URL}/a", status_code=302, headers={"location": f"{other}/b1"}
+        )
+        httpx_mock.add_response(
+            url=f"{other}/b1",
+            status_code=302,
+            headers={"location": "/b2", "set-cookie": "bsid=2; Path=/"},
+        )
+        httpx_mock.add_response(
+            url=f"{other}/b2", status_code=302, headers={"location": f"{BASE_URL}/back"}
+        )
+        httpx_mock.add_response(url=f"{BASE_URL}/back", json=self.OK)
+
+        client = self._client(cookies={"sid": "1"})
+        client.get("/a", cast_to=dict)
+
+        first, *rest = httpx_mock.get_requests()
+        assert first.headers["cookie"] == "sid=1"
+        for request in rest:
+            assert "cookie" not in request.headers
+            assert "x-api-key" not in request.headers
+
+    @pytest.mark.parametrize("status", [300, 304, 305, 306, 399])
+    def test_non_redirect_3xx_is_not_followed(self, httpx_mock: HTTPXMock, status: int):
+        """Test only 301/302/303/307/308 are followed."""
+        httpx_mock.add_response(
+            url=f"{BASE_URL}/a",
+            status_code=status,
+            headers={"location": "/b"},
+            json={"code": str(status), "desc": "redirect"},
+        )
+
+        with pytest.raises(PayOSError):
+            self._client().get("/a", cast_to=dict)
+
+        assert len(httpx_mock.get_requests()) == 1
+
+    def test_too_many_redirects_with_default_retries(self, httpx_mock: HTTPXMock):
+        """Test exceeding the redirect cap is not retried."""
+        httpx_mock.add_response(
+            url=f"{BASE_URL}/a", status_code=302, headers={"location": "/a"}, is_reusable=True
+        )
+
+        with pytest.raises(PayOSError, match=r"Too many redirects \(more than 5\)"):
+            self._client().get("/a", cast_to=dict)
+
+        assert len(httpx_mock.get_requests()) == 6

@@ -34,7 +34,7 @@ from ._core.exceptions import (
     PayOSError,
 )
 from ._core.request_options import RequestOptions
-from ._crypto import CryptoProvider
+from ._crypto import CryptoProvider, constant_time_equal
 from ._version import __version__
 from .utils import (
     cast_to as cast_response_to,
@@ -48,6 +48,9 @@ from .utils._compat import (
     _create_signature_of_payment_request,
 )
 from .utils.logs import SensitiveHeadersFilter
+from .utils.path import encode_path_segment
+from .utils.redirect import MAX_REDIRECTS, NoAuth, build_redirect_request
+from .utils.response_validation import validate_response_data
 
 try:
     import httpx
@@ -246,6 +249,38 @@ class AsyncPayOS:
             timeout=self.timeout if not options.timeout else options.timeout,
         )
 
+    async def _send(self, request: httpx.Request) -> httpx.Response:
+        """Send ``request``, following redirects while keeping credentials on the original origin.
+
+        The default HTTP client does not follow redirects. When a custom ``http_client`` is created with
+        ``follow_redirects=True``, redirects are followed here (at most ``MAX_REDIRECTS``) instead of by
+        httpx, which would forward ``x-api-key``/``x-client-id`` to another origin.
+        """
+        if not self._http_client.follow_redirects:
+            return await self._http_client.send(request)
+
+        original_url = request.url
+        left_origin = False
+        # Client auth is reapplied while the chain stays on the original origin and never after it leaves.
+        auth: Any = httpx.USE_CLIENT_DEFAULT
+        redirects = 0
+        while True:
+            response = await self._http_client.send(request, auth=auth, follow_redirects=False)
+            redirect = build_redirect_request(
+                response,
+                original_url=original_url,
+                left_origin=left_origin,
+                cookies=self._http_client.cookies,
+            )
+            if redirect is None:
+                return response
+            await response.aclose()
+            if redirects >= MAX_REDIRECTS:
+                raise PayOSError(f"Too many redirects (more than {MAX_REDIRECTS})")
+            redirects += 1
+            request, left_origin = redirect
+            auth = NoAuth() if left_origin else httpx.USE_CLIENT_DEFAULT
+
     def _should_retry(self, response: httpx.Response, retry_count: int) -> bool:
         """Determine if request should be retried."""
         if retry_count >= self.max_retries:
@@ -355,13 +390,16 @@ class AsyncPayOS:
         self, options: FinalRequestOptions, response_data: Any, response_signature: Optional[str]
     ) -> None:
         """Verify response signature."""
-        if not options.signature_response or not response_data:
+        if not options.signature_response:
+            return
+        if response_data is None:
             return
 
-        if not response_signature:
-            raise InvalidSignatureError("Response signature missing")
+        if not isinstance(response_signature, str) or not response_signature:
+            raise InvalidSignatureError("Missing response signature")
 
         if options.signature_response == "body":
+            validate_response_data(response_data)
             expected_signature = self.crypto.create_signature_from_object(
                 response_data,
                 self.checksum_key,
@@ -371,7 +409,9 @@ class AsyncPayOS:
         else:
             raise InvalidSignatureError("Invalid signature response type")
 
-        if not expected_signature or response_signature != expected_signature:
+        if not expected_signature or not constant_time_equal(
+            response_signature, expected_signature
+        ):
             raise InvalidSignatureError("Response signature verification failed")
 
     async def request(
@@ -387,7 +427,7 @@ class AsyncPayOS:
         log.debug("Request options: %s", request_to_dict(request))
 
         try:
-            response = await self._http_client.send(request=request)
+            response = await self._send(request)
 
             if not response.is_success:
                 should_retry = self._should_retry(response, retry_count)
@@ -516,7 +556,7 @@ class AsyncPayOS:
         request = self._build_request(options)
 
         try:
-            response = await self._http_client.send(request=request)
+            response = await self._send(request)
             if not response.is_success:
                 error_data = None
                 try:
@@ -615,11 +655,16 @@ class AsyncPayOS:
         url = f"{self.base_url}/v2/payment-requests"
         headers = self._build_headers()
 
-        response = await self._http_client.post(url, json=paymentData.to_json(), headers=headers)
+        response = await self._send(
+            self._http_client.build_request(
+                "POST", url, json=paymentData.to_json(), headers=headers
+            )
+        )
 
         if response.status_code == 200:
             response_json = response.json()
             if response_json["code"] == "00":
+                validate_response_data(response_json["data"])
                 response_signature = _create_signature_from_obj(
                     response_json["data"], self.checksum_key
                 )
@@ -662,15 +707,20 @@ class AsyncPayOS:
 
         if type(orderId) not in [str, int]:
             raise ValueError(ERROR_MESSAGE["INVALID_PARAMETER"])
+        try:
+            order_id = encode_path_segment("orderId", orderId)
+        except PayOSError as exc:
+            raise ValueError(f"{ERROR_MESSAGE['INVALID_PARAMETER']} {exc}") from None
 
-        url = f"{self.base_url}/v2/payment-requests/{orderId}"
+        url = f"{self.base_url}/v2/payment-requests/{order_id}"
         headers = self._build_headers()
 
-        response = await self._http_client.get(url, headers=headers)
+        response = await self._send(self._http_client.build_request("GET", url, headers=headers))
 
         if response.status_code == 200:
             response_json = response.json()
             if response_json["code"] == "00":
+                validate_response_data(response_json["data"])
                 response_signature = _create_signature_from_obj(
                     response_json["data"], self.checksum_key
                 )
@@ -716,18 +766,25 @@ class AsyncPayOS:
 
         if type(orderId) not in [str, int]:
             raise ValueError(ERROR_MESSAGE["INVALID_PARAMETER"])
+        try:
+            order_id = encode_path_segment("orderId", orderId)
+        except PayOSError as exc:
+            raise ValueError(f"{ERROR_MESSAGE['INVALID_PARAMETER']} {exc}") from None
 
-        url = f"{self.base_url}/v2/payment-requests/{orderId}/cancel"
+        url = f"{self.base_url}/v2/payment-requests/{order_id}/cancel"
         headers = self._build_headers()
         body = (
             {"cancellationReason": cancellationReason} if cancellationReason is not None else None
         )
 
-        response = await self._http_client.post(url, headers=headers, json=body)
+        response = await self._send(
+            self._http_client.build_request("POST", url, headers=headers, json=body)
+        )
 
         if response.status_code == 200:
             response_json = response.json()
             if response_json["code"] == "00":
+                validate_response_data(response_json["data"])
                 response_signature = _create_signature_from_obj(
                     response_json["data"], self.checksum_key
                 )
@@ -776,7 +833,9 @@ class AsyncPayOS:
         headers = self._build_headers()
         data = {"webhookUrl": webhookUrl}
 
-        response = await self._http_client.post(url, json=data, headers=headers)
+        response = await self._send(
+            self._http_client.build_request("POST", url, json=data, headers=headers)
+        )
 
         if response.status_code == 200:
             return webhookUrl

@@ -77,7 +77,7 @@ class TestWebhooks:
             base_url=BASE_URL,
         )
 
-        with pytest.raises(WebhookError, match="Webhook schema validation failed"):
+        with pytest.raises(WebhookError, match="Invalid webhook data"):
             client.webhooks.verify(webhook_dict)
 
     def test_verify_missing_signature(self):
@@ -351,7 +351,7 @@ class TestWebhooks:
             base_url=BASE_URL,
         )
 
-        with pytest.raises(WebhookError, match="Webhook schema validation failed"):
+        with pytest.raises(WebhookError, match="Invalid webhook data"):
             client.webhooks.verify(json_string)
 
     def test_verify_valid_bytes_payload(self, mock_crypto_sync, monkeypatch: pytest.MonkeyPatch):
@@ -850,7 +850,7 @@ class TestAsyncWebhooks:
             base_url=BASE_URL,
         )
 
-        with pytest.raises(WebhookError, match="Webhook schema validation failed"):
+        with pytest.raises(WebhookError, match="Invalid webhook data"):
             await client.webhooks.verify(json_string)
 
     @pytest.mark.asyncio
@@ -980,3 +980,36 @@ class TestAsyncWebhooks:
         # Test with list
         with pytest.raises(WebhookError, match="Unsupported payload type"):
             await client.webhooks.verify([1, 2, 3])  # type: ignore
+
+
+def _a1_payload_with_unencodable_signature():
+    import json
+    import pathlib
+
+    vectors = json.loads(
+        pathlib.Path(__file__).with_name("webhook-vectors.json").read_text("utf-8")
+    )
+    case = next(c for c in vectors["cases"] if c["id"].startswith("A1_"))
+    payload = json.loads(case["body"])
+    payload["signature"] = "\ud800"
+    text = json.dumps(payload)
+    return vectors["checksumKey"], {"str": text, "bytes": text.encode("utf-8"), "dict": payload}
+
+
+@pytest.mark.parametrize("kind", ["str", "bytes", "dict"])
+def test_verify_unencodable_signature_is_not_integrity(kind):
+    checksum_key, payloads = _a1_payload_with_unencodable_signature()
+    client = PayOS(client_id="c", api_key="a", checksum_key=checksum_key)
+
+    with pytest.raises(WebhookError, match="Data not integrity"):
+        client.webhooks.verify(payloads[kind])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["str", "bytes", "dict"])
+async def test_async_verify_unencodable_signature_is_not_integrity(kind):
+    checksum_key, payloads = _a1_payload_with_unencodable_signature()
+    client = AsyncPayOS(client_id="c", api_key="a", checksum_key=checksum_key)
+
+    with pytest.raises(WebhookError, match="Data not integrity"):
+        await client.webhooks.verify(payloads[kind])

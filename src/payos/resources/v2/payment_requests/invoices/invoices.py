@@ -6,6 +6,7 @@ from ....._core.request_options import FileDownloadResponse
 from .....types.v2 import (
     InvoicesInfo,
 )
+from .....utils.path import encode_path_segment
 from ...._base import AsyncBaseResource, BaseResource
 
 
@@ -23,7 +24,7 @@ class Invoices(BaseResource):
         Retrieve invoices of a payment link.
         """
         response = self._client.get(
-            f"/v2/payment-requests/{id}/invoices",
+            f"/v2/payment-requests/{encode_path_segment('id', id)}/invoices",
             headers=extra_headers,
             cast_to=InvoicesInfo,
             signature_response="body",
@@ -43,7 +44,7 @@ class Invoices(BaseResource):
         Download an invoice in PDF format.
         """
         response = self._client.download(
-            f"/v2/payment-requests/{id}/invoices/{invoice_id}/download",
+            f"/v2/payment-requests/{encode_path_segment('id', id)}/invoices/{encode_path_segment('invoice_id', invoice_id)}/download",
             headers=extra_headers,
             **kwargs,
         )
@@ -64,7 +65,7 @@ class AsyncInvoices(AsyncBaseResource):
         Retrieve invoices of a payment link.
         """
         response = await self._client.get(
-            f"/v2/payment-requests/{id}/invoices",
+            f"/v2/payment-requests/{encode_path_segment('id', id)}/invoices",
             headers=extra_headers,
             cast_to=InvoicesInfo,
             signature_response="body",
@@ -84,7 +85,7 @@ class AsyncInvoices(AsyncBaseResource):
         Download an invoice in PDF format.
         """
         response = await self._client.download(
-            f"/v2/payment-requests/{id}/invoices/{invoice_id}/download",
+            f"/v2/payment-requests/{encode_path_segment('id', id)}/invoices/{encode_path_segment('invoice_id', invoice_id)}/download",
             headers=extra_headers,
             **kwargs,
         )
