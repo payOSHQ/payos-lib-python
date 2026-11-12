@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   publish-and-release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: publish
     # Only run if tests passed and this is a tag push, or manual dispatch
     if: |
